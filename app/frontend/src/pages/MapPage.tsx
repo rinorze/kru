@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { GeoJSON } from 'react-leaflet'
+import type { Layer } from 'leaflet'
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts'
 import { api, type BuildingDetail } from '../api'
 import ZoneMap, { FlyTo, type Marker } from '../components/ZoneMap'
@@ -8,6 +10,19 @@ import { PageHead, Seg } from '../components/ui'
 import { BAND_HEX, VILLAGE_HEX, fmt, pressureHex, useApp, useData } from '../state'
 
 type Mode = 'band' | 'village' | 'p0' | 'p1'
+const PIPE = '#0E5A8A'
+
+/** Tooltip for a pipe from KRU's GIS. Built as DOM text so attribute values from the file are never read as HTML. */
+function pipeTip(f: GeoJSON.Feature, layer: Layer) {
+  const el = document.createElement('div')
+  for (const [k, v] of Object.entries(f.properties ?? {})) {
+    if (v === null || v === '') continue
+    const row = document.createElement('div')
+    row.textContent = `${k}: ${k === 'length_m' ? fmt(Number(v)) + ' m' : String(v)}`
+    el.appendChild(row)
+  }
+  if (el.childElementCount) layer.bindTooltip(el, { sticky: true })
+}
 const RULE_SQ: Record<string, [string, string]> = {
   zero: ['Lexim zero', 'Zero reading'], drop: ['Rënie e fortë', 'Sharp drop'], peer: ['Nën fqinjët', 'Below neighbours'], spike: ['Rritje e fortë', 'Sharp rise'],
 }
@@ -15,7 +30,7 @@ const RULE_SQ: Record<string, [string, string]> = {
 export default function MapPage() {
   const { t, buildings, sensors, version, toast } = useApp()
   const [mode, setMode] = useState<Mode>('band')
-  const [layers, setLayers] = useState({ buildings: true, anomalies: true, suspects: true, contracts: true, workorders: true, sensors: true, pois: true })
+  const [layers, setLayers] = useState({ network: true, buildings: true, anomalies: true, suspects: true, contracts: true, workorders: true, sensors: true, pois: true })
   const [sel, setSel] = useState<number | null>(null)
   const [code, setCode] = useState<string | null>(null)
   const [q, setQ] = useState('')
@@ -24,10 +39,11 @@ export default function MapPage() {
   const mm = useData(api.mismatches)
   const wo = useData(api.workorders)
   const ct = useData(api.contracts)
+  const net = useData(api.network)
+  const pipes = net.data && net.data.features.length > 0 ? net.data : null
   const side = useRef<HTMLElement>(null)
 
   const pmap = useMemo(() => new Map(pr.data?.points.map(([i, p0, p1]) => [i, { p0, p1 }]) ?? []), [pr.data])
-  const byPos = useMemo(() => new Map(buildings.map(b => [`${b.lat},${b.lon}`, b.i])), [buildings])
   const selB = sel !== null ? buildings[sel] : null
 
   const pick = (i: number | undefined) => {
@@ -47,8 +63,8 @@ export default function MapPage() {
   }
   if (layers.suspects && mm.data) for (const s of mm.data.suspects) markers.push({ key: 's' + s.id, lat: s.lat, lon: s.lon, color: '#5B2AA6', r: 7, ring: true,
     label: t(`${s.id}: banesë ${s.area} m² pa konsumator`, `${s.id}: ${s.area} m² dwelling with no customer`), onClick: () => pick(Number(s.id.slice(2))) })
-  if (layers.anomalies && an.data) for (const a of an.data.rows) markers.push({ key: 'a' + a.code, lat: a.lat, lon: a.lon, color: '#B42318', r: 7, ring: true,
-    label: `${a.code}: ${t(an.data.rules[a.rule].sq, an.data.rules[a.rule].en)}`, onClick: () => pick(byPos.get(`${a.lat},${a.lon}`)) })
+  if (layers.anomalies && an.data) for (const a of an.data.rows) if (a.lat !== null && a.lon !== null) markers.push({ key: 'a' + a.code, lat: a.lat, lon: a.lon, color: '#B42318', r: 7, ring: true,
+    label: `${a.code}: ${t(an.data.rules[a.rule].sq, an.data.rules[a.rule].en)}`, onClick: () => (a.bi !== null ? pick(a.bi) : setCode(a.code)) })
   if (layers.contracts && ct.data) for (const k of ct.data) {
     const b = k.building ? buildings[Number(k.building.slice(2))] : undefined
     if (b) markers.push({ key: 'c' + k.number, lat: b.lat, lon: b.lon, color: '#1E7F4F', r: 7, ring: true, label: `${k.number}, ${k.customer_code}`, onClick: () => pick(b.i) })
@@ -74,7 +90,9 @@ export default function MapPage() {
     } else if (/^K-\d+$/.test(s)) {
       try {
         const c = await api.customer(s)
-        return pick(byPos.get(`${c.lat},${c.lon}`))
+        if (c.bi !== null) return pick(c.bi)
+        setCode(c.code)  // a meter with no GIS point: show its card instead
+        return
       } catch { /* fall through to the message */ }
       const k = ct.data?.find(x => x.customer_code === s)
       if (k?.building) return pick(Number(k.building.slice(2)))
@@ -99,7 +117,7 @@ export default function MapPage() {
           { v: 'p0', label: t('Presioni tani', 'Pressure now') }, { v: 'p1', label: t('Pas PRV', 'After PRV') }]} />
       </div>
       <div className="map-tools layers">
-        {([['buildings', t('Ndërtesat', 'Buildings')], ['anomalies', t('Anomalitë', 'Anomalies')], ['suspects', t('Pa kontratë', 'No contract')],
+        {([...(pipes ? [['network', t('Rrjeti i tubave', 'Pipe network')] as const] : []), ['buildings', t('Ndërtesat', 'Buildings')], ['anomalies', t('Anomalitë', 'Anomalies')], ['suspects', t('Pa kontratë', 'No contract')],
           ['contracts', t('Kontrata të reja', 'New contracts')], ['workorders', t('Urdhrat e hapur', 'Open orders')], ['sensors', t('Sensorët', 'Sensors')],
           ['pois', t('Objektet publike', 'Public buildings')]] as const).map(([k, l]) => (
           <label key={k} className="check" style={{ margin: 0 }}><input type="checkbox" checked={layers[k]} onChange={() => toggle(k)} />{l}</label>
@@ -110,9 +128,11 @@ export default function MapPage() {
         <span className="chip"><span className="dot ringed" style={{ background: '#B42318' }} />{t('Anomali', 'Anomaly')}</span>
         <span className="chip"><span className="dot ringed" style={{ background: '#5B2AA6' }} />{t('Banesë pa kontratë', 'Dwelling with no contract')}</span>
         <span className="chip"><span className="dot ringed" style={{ background: '#1E7F4F' }} />{t('Kontratë e re', 'New contract')}</span>
+        {pipes && <span className="chip"><span className="line-key" style={{ background: PIPE }} />{t('Tub, nga GIS-i i KRU-së', "Pipe, from KRU's GIS")}</span>}
       </div>
       <div className="map-layout">
         <ZoneMap size="tall" markers={markers} sensors={sensors} showSensors={layers.sensors} showPois={layers.pois} selected={selB}>
+          {pipes && layers.network && <GeoJSON key={`net-${version}`} data={pipes} style={{ color: PIPE, weight: 2.5, opacity: 0.85 }} onEachFeature={pipeTip} />}
           {selB && <FlyTo lat={selB.lat} lon={selB.lon} zoom={18} />}
         </ZoneMap>
         <aside className="panel map-side" ref={side} aria-live="polite">
@@ -121,8 +141,9 @@ export default function MapPage() {
             : <ZoneSummary counts={{ anomalies: an.data?.rows.length, suspects: mm.data?.suspects.length, contracts: ct.data?.length, orders: wo.data?.filter(w => w.status !== 'done').length }} />}
         </aside>
       </div>
-      <p className="note">{t('Satelit dhe topografi nga menyja lart djathtas. Vijat me ndërprerje janë zonat kadastrale fqinje. Rrjeti i tubave nuk është publik: KRU duhet ta japë nga GIS-i i vet.',
-        'Satellite and topography are in the menu at the top right. Dashed lines are the neighbouring cadastral zones. The pipe network is not public: KRU must supply it from its own GIS.')}</p>
+      <p className="note">{t('Satelit dhe topografi nga menyja lart djathtas. Vijat me ndërprerje janë zonat kadastrale fqinje. ', 'Satellite and topography are in the menu at the top right. Dashed lines are the neighbouring cadastral zones. ')}
+        {pipes ? t(`Rrjeti i tubave vjen nga GIS-i i KRU-së: ${fmt(pipes.features.length)} segmente.`, `The pipe network comes from KRU's GIS: ${fmt(pipes.features.length)} segments.`)
+          : <>{t('Rrjeti i tubave nuk është publik: KRU mund ta ngarkojë si GeoJSON te ', 'The pipe network is not public: KRU can upload it as GeoJSON under ')}<Link to="/te-dhenat">{t('Të dhënat e KRU-së', 'KRU data')}</Link>.</>}</p>
       <CustomerDrawer code={code} onClose={() => setCode(null)} />
     </div>
   )
@@ -162,13 +183,13 @@ function ZoneSummary({ counts }: { counts: Record<'anomalies' | 'suspects' | 'co
         {sensors.map(s => <div key={s.id} style={{ display: 'contents' }}><dt>{t(s.sq, s.en)}</dt>
           <dd className="num">{live?.values[s.id] !== undefined ? `${fmt(live.values[s.id], s.kind === 'flow' ? 1 : 2)} ${s.unit}` : '–'}</dd></div>)}
       </dl>
-      {live && <p className="note">{t('Përditësuar', 'Updated')} {live.ts.slice(11)}, {t('vlera të simuluara', 'simulated values')}</p>}
+      {live && <p className="note">{t('Përditësuar', 'Updated')} {live.ts.slice(11)}, {live.source === 'measured' ? t('vlera të matura', 'measured values') : t('vlera të simuluara', 'simulated values')}</p>}
     </>
   )
 }
 
 function BuildingPanel({ refId, onClose, onCustomer }: { refId: string; onClose: () => void; onCustomer: (c: string) => void }) {
-  const { t, toast, bump } = useApp()
+  const { t, toast, bump, kru } = useApp()
   const nav = useNavigate()
   const [b, setB] = useState<BuildingDetail | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -213,7 +234,7 @@ function BuildingPanel({ refId, onClose, onCustomer }: { refId: string; onClose:
       </div>
       {b.arru === 'over' && <p className="note" style={{ color: 'var(--alarm)' }}>{t('Mbi kufirin 7 bar të Rregullës ARRU 02/2016, neni 17.', 'Above the 7 bar limit of ARRU Rule 02/2016, s.17.')}</p>}
       {b.arru === 'under' && <p className="note" style={{ color: 'var(--warn)' }}>{t('Nën minimumin 1,5 bar të ARRU.', 'Below the ARRU minimum of 1.5 bar.')}</p>}
-      <p className="note">{t('Presion statik i modeluar nga kuota; vlerë e vlerësuar.', 'Static pressure modelled from elevation; an estimate.')}</p>
+      <p className="note">{kru?.telemetry.active ? t('Presion statik nga kuota, me nivelin hidraulik të kalibruar nga presioni i natës te loggerët e KRU-së.', "Static pressure from elevation, with the hydraulic grade calibrated from night pressure at KRU's loggers.") : t('Presion statik i modeluar nga kuota; vlerë e vlerësuar.', 'Static pressure modelled from elevation; an estimate.')}</p>
 
       <h3 className="mt">{t('Konsumatorët', 'Customers')} <span className="note">({b.customers.length})</span></h3>
       {b.customers.length > 0 ? (
@@ -245,7 +266,7 @@ function BuildingPanel({ refId, onClose, onCustomer }: { refId: string; onClose:
               <Bar dataKey="v" fill="#1D6FA5" isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
-          <p className="note" style={{ margin: 0 }}>{t('Konsumi i faturuar, 12 muajt e fundit (simuluar)', 'Billed use, last 12 months (simulated)')}</p>
+          <p className="note" style={{ margin: 0 }}>{kru?.billing.active ? t('Konsumi i faturuar, 12 muajt e fundit', 'Billed use, last 12 months') : t('Konsumi i faturuar, 12 muajt e fundit (simuluar)', 'Billed use, last 12 months (simulated)')}</p>
         </div>
       )}
 

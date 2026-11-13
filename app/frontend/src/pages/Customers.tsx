@@ -5,7 +5,8 @@ import { PageHead, Seg } from '../components/ui'
 import { BAND_HEX, fmt, useApp } from '../state'
 
 export default function Customers() {
-  const { t, version } = useApp()
+  const { t, version, kru } = useApp()
+  const bill = kru?.billing.active
   const [q, setQ] = useState('')
   const [village, setVillage] = useState('')
   const [rows, setRows] = useState<CustomerRow[]>([])
@@ -19,8 +20,11 @@ export default function Customers() {
   return (
     <div className="page">
       <PageHead title={t('Konsumatorët', 'Customers')}
-        lead={t('Regjistri i simuluar i faturimit për 779 ekonomi familjare. Çdo konsumator lidhet me një ndërtesë në GIS dhe ka 12 lexime mujore.',
-          'The simulated billing register for 779 households. Each customer is linked to a building in GIS and has 12 monthly readings.')} />
+        lead={bill
+          ? t(`Regjistri i faturimit të KRU-së: ${fmt(bill.customers)} konsumatorë, ${fmt(bill.located)} me pikë GIS, muajt ${bill.first_period} – ${bill.last_period}.`,
+            `KRU's billing register: ${fmt(bill.customers)} customers, ${fmt(bill.located)} with a GIS point, months ${bill.first_period} – ${bill.last_period}.`)
+          : t('Regjistri i simuluar i faturimit për 779 ekonomi familjare. Çdo konsumator lidhet me një ndërtesë në GIS dhe ka 12 lexime mujore. Ngarkoni eksportin e KRU-së te Të dhënat e KRU-së.',
+            "The simulated billing register for 779 households. Each customer is linked to a building in GIS and has 12 monthly readings. Upload KRU's export under KRU data.")} />
       <div className="map-tools">
         <input type="search" placeholder={t('Kërko kodin, p.sh. K-10042', 'Search a code, e.g. K-10042')} value={q} onChange={e => setQ(e.target.value)} style={{ maxWidth: 280 }} aria-label={t('Kërko', 'Search')} />
         <Seg label={t('Fshati', 'Village')} value={village} onChange={setVillage} options={[{ v: '', label: t('Të dy', 'Both') }, { v: 'Kçiq i Madh', label: 'Kçiq i Madh' }, { v: 'Kçiq i Vogël', label: 'Kçiq i Vogël' }]} />
@@ -33,8 +37,8 @@ export default function Customers() {
             {rows.map(r => (
               <tr key={r.code} className="click" onClick={() => setCode(r.code)} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') setCode(r.code) }}>
                 <td><b>{r.code}</b></td><td>{r.village}</td>
-                <td><span className="chip"><span className="dot" style={{ background: BAND_HEX[r.band] }} />{r.band}</span></td>
-                <td className="r num">{fmt(r.elev)} m</td><td className="r num">{fmt(r.avg, 1)}</td><td className="r num">{fmt(r.last, 1)}</td><td className="r num">{r.meter_year}</td>
+                <td>{r.band ? <span className="chip"><span className="dot" style={{ background: BAND_HEX[r.band] }} />{r.band}</span> : <span className="tag">{t('pa GIS', 'no GIS')}</span>}</td>
+                <td className="r num">{fmt(r.elev)} m</td><td className="r num">{fmt(r.avg, 1)}</td><td className="r num">{fmt(r.last, 1)}</td><td className="r num">{r.meter_year ?? '–'}</td>
                 <td>{r.rule ? <span className={'tag ' + r.rule}>{t('Anomali', 'Anomaly')}</span> : <span className="tag">{t('Normal', 'Normal')}</span>}</td>
               </tr>
             ))}

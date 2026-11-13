@@ -67,7 +67,7 @@ export default function Anomalies() {
             </tbody>
           </table>
         </section>
-        <ZoneMap size="short" showSensors={false} markers={rows.map(r => ({ key: r.code, lat: r.lat, lon: r.lon, color: RULE_COLOR[r.rule], r: 6, ring: true, label: r.code, onClick: () => setCode(r.code) }))} />
+        <ZoneMap size="short" showSensors={false} markers={rows.filter(r => r.lat !== null && r.lon !== null).map(r => ({ key: r.code, lat: r.lat!, lon: r.lon!, color: RULE_COLOR[r.rule], r: 6, ring: true, label: r.code, onClick: () => setCode(r.code) }))} />
       </div>
       <CustomerDrawer code={code} onClose={() => setCode(null)} />
     </div>

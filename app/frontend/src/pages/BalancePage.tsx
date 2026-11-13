@@ -6,6 +6,7 @@ import { eur, fmt, useApp, useData } from '../state'
 export default function BalancePage() {
   const { t } = useApp()
   const { data: b, error } = useData(api.balance)
+  const as = useData(api.assumptions).data
   if (!b) return <div className="page"><Loading error={error} /></div>
   const pct = (x: number) => fmt((x / b.input) * 100, 1) + '%'
   const iliPos = Math.min(100, (b.ili / 24) * 100)
@@ -69,7 +70,7 @@ export default function BalancePage() {
         </section>
         <section className="panel">
           <h2>{t('Indeksi i humbjeve të infrastrukturës', 'Infrastructure Leakage Index')}</h2>
-          <p className="sub">{t('ILI = humbjet reale ÷ humbjet e pashmangshme (UARL). UARL = (18·Lm + 0,8·Nc + 25·Lp)·P, me 30 km rrjet, 779 lidhje dhe presion mesatar ', 'ILI = real losses ÷ unavoidable losses (UARL). UARL = (18·Lm + 0.8·Nc + 25·Lp)·P, with 30 km of mains, 779 connections and an average pressure of ')}<span className="num">{fmt(b.avg_pressure_m, 1)}</span> m.</p>
+          <p className="sub">{t(`ILI = humbjet reale ÷ humbjet e pashmangshme (UARL). UARL = (18·Lm + 0,8·Nc + 25·Lp)·P, me ${fmt(as?.mains_km.v, 1)} km rrjet, ${fmt(as?.connections.v)} lidhje dhe presion mesatar `, `ILI = real losses ÷ unavoidable losses (UARL). UARL = (18·Lm + 0.8·Nc + 25·Lp)·P, with ${fmt(as?.mains_km.v, 1)} km of mains, ${fmt(as?.connections.v)} connections and an average pressure of `)}<span className="num">{fmt(b.avg_pressure_m, 1)}</span> m.</p>
           <div className="scale">
             <span /><span /><span /><span />
             <div className="scale-marker" style={{ left: `calc(${iliPos}% - 1px)` }} />

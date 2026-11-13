@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { api, type Building, type Live, type Sensor, type Zone } from './api'
+import { api, type Building, type DataStatus, type Live, type Sensor, type Zone } from './api'
 
 export type Lang = 'sq' | 'en'
 
@@ -15,6 +15,8 @@ interface Ctx {
   buildings: Building[]
   sensors: Sensor[]
   toast: (msg: string) => void
+  /** Which datasets come from KRU's own files; null until loaded. */
+  kru: DataStatus | null
 }
 
 const AppCtx = createContext<Ctx | null>(null)
@@ -30,6 +32,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [buildings, setBuildings] = useState<Building[]>([])
   const [sensors, setSensors] = useState<Sensor[]>([])
   const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const [kru, setKru] = useState<DataStatus | null>(null)
 
   const setLang = useCallback((l: Lang) => {
     setLangState(l)
@@ -49,6 +52,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    api.dataStatus().then(setKru).catch(() => undefined)
+  }, [version])
+
+  useEffect(() => {
     let es: EventSource | null = null
     let timer: number | undefined
     const connect = () => {
@@ -66,8 +73,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { es?.close(); window.clearTimeout(timer) }
   }, [])
 
-  const value = useMemo(() => ({ lang, setLang, t, version, bump, live, liveOk, zone, buildings, sensors, toast }),
-    [lang, setLang, t, version, bump, live, liveOk, zone, buildings, sensors, toast])
+  const value = useMemo(() => ({ lang, setLang, t, version, bump, live, liveOk, zone, buildings, sensors, toast, kru }),
+    [lang, setLang, t, version, bump, live, liveOk, zone, buildings, sensors, toast, kru])
 
   return (
     <AppCtx.Provider value={value}>
@@ -99,8 +106,8 @@ export function useData<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   return { data, error, reload: () => setTick(x => x + 1) }
 }
 
-export const fmt = (x: number, d = 0) =>
-  Number.isFinite(x) ? x.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d }).replace(/\./g, ' ') : '–'
+export const fmt = (x: number | null | undefined, d = 0) =>
+  x != null && Number.isFinite(x) ? x.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d }).replace(/\./g, ' ') : '–'
 
 export const eur = (x: number) => fmt(x) + ' €'
 

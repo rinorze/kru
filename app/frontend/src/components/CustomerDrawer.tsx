@@ -50,7 +50,7 @@ export default function CustomerDrawer({ code, onClose }: { code: string | null;
         {!c && !err && <p className="note">{t('Duke ngarkuar…', 'Loading…')}</p>}
         {c && (
           <>
-            <p className="sub">{c.village}, {t('brezi', 'band')} {c.band}, {t('kuota', 'elevation')} {fmt(c.elev, 1)} m</p>
+            <p className="sub">{c.village ?? t('Fshati i panjohur', 'Village unknown')}{c.band && <>, {t('brezi', 'band')} {c.band}, {t('kuota', 'elevation')} {fmt(c.elev, 1)} m</>}</p>
             {c.anomaly && rule && (
               <div className="callout alarm">
                 <b>{t(rule.sq, rule.en)}</b>
@@ -60,10 +60,10 @@ export default function CustomerDrawer({ code, onClose }: { code: string | null;
             <dl className="kv">
               <dt>{t('Mesatarja mujore', 'Monthly average')}</dt><dd>{fmt(c.avg, 1)} m³</dd>
               <dt>{t('Leximi i fundit', 'Last reading')}</dt><dd>{fmt(c.readings[c.readings.length - 1], 1)} m³</dd>
-              <dt>{t('Viti i ujëmatësit', 'Meter year')}</dt><dd>{c.meter_year}{new Date().getFullYear() - c.meter_year > 8 ? ', ' + t('mbi 8 vjet, nën-regjistron', 'over 8 years, under-registers') : ''}</dd>
-              <dt>{t('Koordinatat', 'Coordinates')}</dt><dd>{c.lat.toFixed(5)}, {c.lon.toFixed(5)}</dd>
+              <dt>{t('Viti i ujëmatësit', 'Meter year')}</dt><dd>{c.meter_year ?? '–'}{c.meter_year !== null && new Date().getFullYear() - c.meter_year > 8 ? ', ' + t('mbi 8 vjet, nën-regjistron', 'over 8 years, under-registers') : ''}</dd>
+              <dt>{t('Koordinatat', 'Coordinates')}</dt><dd>{c.lat !== null && c.lon !== null ? `${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}` : t('Pa pikë në GIS', 'No GIS point')}</dd>
             </dl>
-            <h3 className="mt">{t('12 muajt e fundit kundrejt 8 fqinjëve më të afërt', 'Last 12 months against the 8 nearest neighbours')}</h3>
+            <h3 className="mt">{t('12 muajt e fundit kundrejt 8 fqinjëve më të afërt', 'Last 12 months against the 8 nearest neighbours')}{c.lat === null && <span className="note"> {t('(pa pikë GIS: krahasuar me fshatin)', '(no GIS point: compared with the village)')}</span>}</h3>
             <div style={{ height: 230 }}>
               <ResponsiveContainer>
                 <LineChart data={data} margin={{ top: 8, right: 10, left: -18, bottom: 0 }}>
@@ -79,7 +79,7 @@ export default function CustomerDrawer({ code, onClose }: { code: string | null;
             </div>
             <div style={{ display: 'flex', gap: 8, margin: '14px 0' }}>
               <button className="btn primary" onClick={createWo}>{t('Krijo urdhër pune', 'Create work order')}</button>
-              <a className="btn" href={`https://www.google.com/maps?q=${c.lat},${c.lon}`} target="_blank" rel="noreferrer">{t('Hap në Google Maps', 'Open in Google Maps')}</a>
+              {c.lat !== null && <a className="btn" href={`https://www.google.com/maps?q=${c.lat},${c.lon}`} target="_blank" rel="noreferrer">{t('Hap në Google Maps', 'Open in Google Maps')}</a>}
             </div>
             <h3>{t('Leximet në terren', 'Field readings')}</h3>
             {c.field_readings.length === 0

@@ -4,7 +4,9 @@ import { Loading, PageHead } from '../components/ui'
 import { useApp, useData } from '../state'
 
 export default function Sources() {
-  const { t } = useApp()
+  const { t, kru } = useApp()
+  const file = (m: { file?: string; at?: string } | null | undefined) => (m?.file ? ` (${m.file}, ${m.at?.slice(0, 10) ?? ''})` : '')
+  const tel = kru?.telemetry.active
   const { data: p, error } = useData(api.plan)
   const data = [
     { what: t('Kufiri i zonës', 'Zone boundary'), src: t('Geoportali i Kosovës (AKK), zona kadastrale 71202012, WMS GetFeatureInfo, EPSG:7392 → WGS84', 'Kosovo Geoportal (AKK), cadastral zone 71202012, WMS GetFeatureInfo, EPSG:7392 → WGS84'), real: true },
@@ -12,7 +14,15 @@ export default function Sources() {
     { what: t('Kuota e terrenit', 'Ground elevation'), src: 'EU-DEM / Copernicus GLO-30 (Open-Elevation, OpenTopoData)', real: true },
     { what: t('Popullsia dhe ekonomitë familjare', 'Population and households'), src: t('ASK, Regjistrimi i Popullsisë 2024, sipas fshatit', 'KAS, 2024 Population Census, by village'), real: true },
     { what: t('NRW, tarifat, lidhjet ilegale', 'NRW, tariffs, illegal connections'), src: t('KRU Mitrovica, Raporti Vjetor 2025; ARRU, tarifat 2026', 'KRU Mitrovica, Annual Report 2025; ARRU, 2026 tariffs'), real: true },
-    { what: t('Rrjedhat, presionet, konsumatorët', 'Flows, pressures, customers'), src: t('Të simuluara. Zëvendësohen me SCADA, faturimin dhe GIS-in e KRU-së.', 'Simulated. Replaced by KRU\'s SCADA, billing and GIS.'), real: false },
+    kru?.billing.active
+      ? { what: t('Konsumatorët dhe faturimi', 'Customers and billing'), src: t('Eksporti i faturimit të KRU-së', "KRU's billing export") + file(kru.billing.active), real: true }
+      : { what: t('Konsumatorët dhe faturimi', 'Customers and billing'), src: t('Të simuluara. Zëvendësohen me eksportin e faturimit të KRU-së.', "Simulated. Replaced by KRU's billing export."), real: false },
+    tel
+      ? { what: t('Rrjedhat dhe presionet', 'Flows and pressures'), src: t('Loggerët / SCADA e KRU-së', "KRU's loggers / SCADA") + file(tel) + ((kru?.telemetry.flow_days ?? 0) < 3 ? t('; rrjedha e natës ende model', '; night flow still modelled') : ''), real: true }
+      : { what: t('Rrjedhat dhe presionet', 'Flows and pressures'), src: t('Të simuluara. Zëvendësohen me loggerët ose SCADA-n e KRU-së.', "Simulated. Replaced by KRU's loggers or SCADA."), real: false },
+    kru?.network.active
+      ? { what: t('Rrjeti i tubave', 'Pipe network'), src: t('GIS-i i rrjetit të KRU-së', "KRU's network GIS") + file(kru.network.active), real: true }
+      : { what: t('Rrjeti i tubave', 'Pipe network'), src: t('Gjatësia 30 km është supozim derisa KRU të ngarkojë GIS-in e rrjetit.', 'The 30 km length is an assumption until KRU uploads its network GIS.'), real: false },
   ]
   const methods = [
     [t('Bilanci i ujit', 'Water balance'), 'IWA / AWWA M36, Alegre et al. 2006'],

@@ -13,8 +13,10 @@ export interface Zone {
   boundary: GeoJSON.Feature; neighbours: GeoJSON.Feature[]; pois: Poi[]
 }
 export interface Sensor { id: string; kind: 'flow' | 'pressure'; unit: string; sq: string; en: string; lat: number | null; lon: number | null; elev: number | null }
-export interface Live { ts: string; values: Record<string, number> }
+export type Source = 'measured' | 'model'
+export interface Live { ts: string; values: Record<string, number>; source?: Source }
 export interface Flows {
+  source?: Source
   days: string[]; hourly: number[]; daily: number[]; billed: number[]; mnf: number[]
   baseline: number; threshold: number; legit_night: number; night_leak_m3h: number
   alarm: null | { since: string; extra_m3h: number; extra_m3d: number; cost_year: number }
@@ -33,14 +35,14 @@ export interface Pressure {
   payback_months: number | null; hgl_low: number; hgl_high: number
 }
 export type Rule = 'zero' | 'drop' | 'peer' | 'spike'
-export interface Anomaly { code: string; rule: Rule; last: number; expected: number; lost_m3_month: number; lat: number; lon: number; band: Band; village: Village; meter_year: number }
+export interface Anomaly { code: string; rule: Rule; last: number; expected: number; lost_m3_month: number; lat: number | null; lon: number | null; band: Band | null; village: Village | null; meter_year: number | null; bi: number | null }
 export interface Anomalies { rules: Record<Rule, { sq: string; en: string; why_sq: string; why_en: string }>; rows: Anomaly[]; by_rule: Partial<Record<Rule, number>>; lost_m3_month: number; lost_eur_year: number }
-export interface Suspect { id: string; lat: number; lon: number; elev: number; band: Band; village: Village; area: number; nearest_m: number }
-export interface Mismatch { buildings_without_customer: number; suspects: Suspect[]; no_gis: { code: string; avg: number }[] }
-export interface CustomerRow { code: string; band: Band; village: Village; elev: number; avg: number; last: number; meter_year: number; rule: Rule | null; lat: number; lon: number }
+export interface Suspect { id: string; lat: number; lon: number; elev: number; band: Band; village: Village; area: number; nearest_m: number | null }
+export interface Mismatch { buildings_without_customer: number; suspects: Suspect[]; no_gis: { code: string; avg: number | null; village?: Village | null }[] }
+export interface CustomerRow { code: string; band: Band | null; village: Village | null; elev: number | null; avg: number | null; last: number | null; meter_year: number | null; rule: Rule | null; lat: number | null; lon: number | null }
 export interface CustomerDetail {
-  code: string; band: Band; village: Village; elev: number; avg: number; meter_year: number; lat: number; lon: number
-  months: string[]; readings: number[]; peer: number[]; anomaly: Anomaly | null
+  code: string; band: Band | null; village: Village | null; elev: number | null; avg: number | null; meter_year: number | null; lat: number | null; lon: number | null; bi: number | null
+  months: string[]; readings: (number | null)[]; peer: (number | null)[]; anomaly: Anomaly | null
   field_readings: { id: number; reading: number; ts: string; note: string; lat: number | null; lon: number | null }[]
 }
 export type WoStatus = 'open' | 'field' | 'done'
@@ -63,8 +65,8 @@ export interface Plan {
 
 export interface BuildingDetail extends Building {
   ref: string; hgl_m: number; p_now: number; p_prv: number; arru: 'over' | 'under' | 'ok'
-  customers: { code: string; avg: number; last: number; meter_year: number; gis: boolean; rule: Rule | null; lost_m3_month: number }[]
-  months: string[]; use: number[]; suspect: Suspect | null
+  customers: { code: string; avg: number | null; last: number | null; meter_year: number | null; gis: boolean; rule: Rule | null; lost_m3_month: number }[]
+  months: string[]; use: (number | null)[]; suspect: Suspect | null
   sensors: { id: string; sq: string; en: string; distance_m: number }[]
   orders: { id: number; kind: string; ref: string; title: string; status: WoStatus; created: string }[]
   contracts: { number: string; customer_code: string; created: string; name: string }[]
@@ -78,6 +80,18 @@ export interface Contract extends Omit<RegistrationIn, 'signature' | 'accept_ter
   number: string; customer_code: string; created: string; hash: string; prev_hash: string; tariff: number | null
   signature?: string; verified?: boolean; full?: boolean; access?: string
 }
+
+export type ImportKind = 'customers' | 'readings' | 'telemetry' | 'network'
+export type Dataset = 'billing' | 'telemetry' | 'network'
+export interface ImportError { line: number; sq: string; en: string }
+export interface ImportMeta { file?: string; at?: string }
+export interface DataStatus {
+  billing: { active: null | (ImportMeta & { customers: number; located: number; first_period: string; last_period: string }); customer_rows: number; reading_rows: number }
+  telemetry: { active: null | (ImportMeta & { rows: number; from: string; to: string; days: number }); flow_days: number; sensors: Record<string, { rows: number; from: string; to: string }> }
+  network: { active: null | (ImportMeta & { km: number; pipes: number }) }
+  log: { id: number; kind: string; filename: string; accepted: number; rejected: number; at: string }[]
+}
+export interface ImportResult { kind: ImportKind; accepted: number; rejected: number; errors: ImportError[]; status: DataStatus }
 
 /** A 422 from the API: the names of the fields that failed validation. */
 export class FieldError extends Error {
@@ -124,5 +138,13 @@ export const api = {
   building: (ref: string) => req<BuildingDetail>('/buildings/' + encodeURIComponent(ref)),
   createContract: (f: RegistrationIn) => req<Contract>('/contracts', { method: 'POST', body: JSON.stringify(f) }),
   contracts: () => req<Contract[]>('/contracts'),
+  dataStatus: () => req<DataStatus>('/data/status'),
+  importData: async (kind: ImportKind, file: File, replace = false): Promise<ImportResult> => {
+    const r = await fetch(`/api/data/import/${kind}?filename=${encodeURIComponent(file.name)}&replace=${replace}`, { method: 'POST', body: file, headers: { 'Content-Type': 'application/octet-stream' } })
+    if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail ?? m } catch { /* not json */ } throw new Error(m) }
+    return r.json()
+  },
+  clearData: (d: Dataset) => req<DataStatus>('/data/' + d, { method: 'DELETE' }),
+  network: () => req<GeoJSON.FeatureCollection>('/network'),
   contract: (number: string, k = '') => req<Contract>('/contracts/' + encodeURIComponent(number) + (k ? '?k=' + encodeURIComponent(k) : '')),
 }

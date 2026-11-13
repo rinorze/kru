@@ -328,6 +328,23 @@ ol.clauses { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
 .table-tools { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
 .table-tools input { max-width: 360px; }
 
+/* KRU data import */
+.scroll-x { overflow-x: auto; }
+.strip .tag { margin: 6px 0 4px; }
+.strip .delta { display: block; }
+.import { display: flex; flex-direction: column; transition: border-color .15s, background .15s; }
+.import.over { border-color: var(--water); background: var(--water-2); }
+.import table.cols { margin: 4px 0 8px; }
+.import table.cols td:first-child { white-space: nowrap; width: 1%; }
+.import code { font-size: 13px; background: var(--paper-2); padding: 1px 5px; border-radius: 4px; }
+.import .req { color: var(--alarm); }
+.upload-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line-2); }
+.simbar b { font-weight: 600; }
+.simbar a { color: inherit; font-weight: 600; }
+.simbar.real { background: var(--ok-2); color: var(--ok); border-bottom-color: #B9DEC8; }
+.chip.stale { color: var(--warn); }
+.line-key { display: inline-block; width: 16px; height: 3px; border-radius: 2px; }
+
 @media print {
   .rail, .topbar, .simbar, .no-print, .toast { display: none !important; }
   .shell { display: block; }

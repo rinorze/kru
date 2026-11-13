@@ -18,6 +18,7 @@ import Sources from './pages/Sources'
 import Register from './pages/Register'
 import ContractPage from './pages/ContractPage'
 import Contracts from './pages/Contracts'
+import DataPage from './pages/DataPage'
 
 function Rail() {
   const { t, lang, setLang, version } = useApp()
@@ -54,6 +55,7 @@ function Rail() {
       { to: '/terreni', sq: 'Lexim në terren', en: 'Field reading' },
     ] },
     { h: t('Pilot', 'Pilot'), items: [
+      { to: '/te-dhenat', sq: 'Të dhënat e KRU-së', en: 'KRU data' },
       { to: '/plani', sq: 'Plani dhe buxheti', en: 'Plan and budget' },
       { to: '/supozimet', sq: 'Supozimet', en: 'Assumptions' },
       { to: '/burimet', sq: 'Burimet', en: 'Sources' },
@@ -97,8 +99,43 @@ function Rail() {
   )
 }
 
+const FRESH_MS = 90 * 60 * 1000  // loggers usually send hourly; older than this is flagged as stale
+
+function LiveChip() {
+  const { t, live, liveOk } = useApp()
+  if (!live) return <span className="chip"><span className="pulse off" />{t('Duke u lidhur…', 'Connecting…')}</span>
+  if (!liveOk) return <span className="chip"><span className="pulse off" />{t('Pa lidhje', 'Offline')}</span>
+  if (live.source !== 'measured') return <span className="chip"><span className="pulse" />{t('Simulim live, çdo 2 s', 'Simulated live, every 2 s')}</span>
+  const at = new Date(live.ts)
+  const stamp = live.ts.slice(0, 16).replace('T', ' ')
+  if (Date.now() - at.getTime() < FRESH_MS) return <span className="chip"><span className="pulse" />{t('Matur', 'Measured')}, {stamp.slice(11)}</span>
+  return <span className="chip stale" title={t('Leximi i fundit nga loggerët', 'Last logger reading')}><span className="pulse off" />{t('Leximi i fundit', 'Last reading')} {stamp}</span>
+}
+
+function DataBar() {
+  const { t, kru } = useApp()
+  const real: string[] = [], model: string[] = []
+  const put = (on: boolean, sq: string, en: string) => (on ? real : model).push(t(sq, en))
+  const tel = kru?.telemetry
+  put(!!kru?.billing.active, 'konsumatorët dhe faturimi', 'customers and billing')
+  put(!!tel?.active, 'presionet dhe matësit live', 'pressures and live gauges')
+  put(!!tel && tel.flow_days >= 3, 'rrjedha hyrëse dhe e natës', 'inlet and night flow')
+  put(!!kru?.network.active, 'rrjeti i tubave', 'the pipe network')
+  const base = t('Terreni, ndërtesat, rrugët dhe kufiri janë të vërteta (OSM, EU-DEM, Geoportali).', 'Terrain, buildings, roads and the boundary are real (OSM, EU-DEM, Geoportal).')
+  const list = (xs: string[]) => xs.join(', ')
+  return (
+    <div className={'simbar' + (model.length ? '' : ' real')}>
+      {base}{' '}
+      {real.length > 0 && <>{t('Nga të dhënat e KRU-së: ', "From KRU's data: ")}<b>{list(real)}</b>. </>}
+      {model.length > 0
+        ? <>{t('Ende të simuluara: ', 'Still simulated: ')}{list(model)}{real.length ? '' : t(', derisa KRU të ngarkojë të dhënat reale', ' until KRU uploads its real data')}. <NavLink to="/te-dhenat">{t('Ngarko të dhënat', 'Upload data')}</NavLink></>
+        : t('Vlerësimet e mbetura janë te Supozimet.', 'The remaining estimates are listed under Assumptions.')}
+    </div>
+  )
+}
+
 function Topbar() {
-  const { t, live, liveOk, zone } = useApp()
+  const { t, live, zone } = useApp()
   const v = live?.values ?? {}
   const g = (id: string, label: string, unit: string, d = 1) => (
     <div className="gauge" title={id}>
@@ -114,17 +151,14 @@ function Topbar() {
           <span>{zone ? `${t('zona kadastrale', 'cadastral zone')} 71202012, ${fmt(zone.population)} ${t('banorë', 'people')}` : ''}</span>
         </div>
         <div className="gauges" aria-live="polite">
-          <span className="chip"><span className={'pulse' + (liveOk ? '' : ' off')} />{liveOk ? t('Live, çdo 2 s', 'Live, every 2 s') : live ? t('Pa lidhje', 'Offline') : t('Duke u lidhur…', 'Connecting…')}</span>
+          <LiveChip />
           {g('DMA01-Q-HYRJA', t('Hyrja', 'Inlet'), 'm³/h')}
           {g('DMA01-P-ULET', t('Pika e ulët', 'Low point'), 'bar', 2)}
           {g('DMA01-P-AZP', 'AZP', 'bar', 2)}
           {g('DMA01-P-KRIT', t('Pika kritike', 'Critical point'), 'bar', 2)}
         </div>
       </header>
-      <div className="simbar">
-        {t('Terreni, ndërtesat, rrugët dhe kufiri janë të vërteta (OSM, EU-DEM, Geoportali). Rrjedhat, presionet dhe konsumatorët janë të simuluar derisa KRU të japë të dhënat reale.',
-          'Terrain, buildings, roads and the boundary are real (OSM, EU-DEM, Geoportal). Flows, pressures and customers are simulated until KRU provides the real data.')}
-      </div>
+      <DataBar />
     </>
   )
 }
@@ -156,6 +190,7 @@ export default function App() {
           <Route path="/regjistrohu" element={<Register />} />
           <Route path="/kontratat" element={<Contracts />} />
           <Route path="/kontrata/:number" element={<ContractPage />} />
+          <Route path="/te-dhenat" element={<DataPage />} />
           <Route path="*" element={<Overview />} />
         </Routes>
       </div>

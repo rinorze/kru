@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Bar, CartesianGrid, ComposedChart, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, Cell } from 'recharts'
+import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { Loading, PageHead, Stat } from '../components/ui'
 import { eur, fmt, useApp, useData } from '../state'
@@ -7,6 +8,7 @@ import { eur, fmt, useApp, useData } from '../state'
 export default function NightFlow() {
   const { t, bump, toast } = useApp()
   const { data: f, error } = useData(api.flows)
+  const as = useData(api.assumptions).data
   const [leak, setLeak] = useState(3.2)
   const [day, setDay] = useState<number | null>(9)
 
@@ -45,7 +47,7 @@ export default function NightFlow() {
       <div className="strip">
         <Stat label={t('Baza e rrjedhës së natës', 'Night flow baseline')} value={fmt(f.baseline, 1)} unit="m³/h" />
         <Stat label={t('Pragu i alarmit (+10%)', 'Alarm threshold (+10%)')} value={fmt(f.threshold, 1)} unit="m³/h" />
-        <Stat label={t('Konsum legjitim i natës', 'Legitimate night use')} value={fmt(f.legit_night, 2)} unit="m³/h" delta={t('779 lidhje × 1,7 l/orë', '779 connections × 1.7 l/h')} />
+        <Stat label={t('Konsum legjitim i natës', 'Legitimate night use')} value={fmt(f.legit_night, 2)} unit="m³/h" delta={as ? t(`${fmt(as.connections.v)} lidhje × ${fmt(as.legit_night_lph.v, 1)} l/orë`, `${fmt(as.connections.v)} connections × ${fmt(as.legit_night_lph.v, 1)} l/h`) : undefined} />
         <Stat label={t('Rrjedhje natën', 'Night leakage')} value={fmt(f.night_leak_m3h, 1)} unit="m³/h" tone="bad" />
       </div>
 
@@ -84,7 +86,7 @@ export default function NightFlow() {
             </ResponsiveContainer>
           </div>
         </section>
-        <section className="panel">
+        {f.source === 'measured' ? <MeasuredSource /> : <section className="panel">
           <h2>{t('Provo një rrjedhje', 'Try a leak')}</h2>
           <p className="sub">{t('Ndrysho rrjedhjen e simuluar dhe shiko si reagon alarmi. Kjo është e njëjta logjikë që do të punojë mbi të dhënat reale të sensorit.', 'Change the simulated leak and watch the alarm respond. The same logic will run on the real sensor data.')}</p>
           <label className="field">{t('Madhësia e rrjedhjes', 'Leak size')}<span className="val">{fmt(leak, 1)} m³/h</span>
@@ -96,8 +98,27 @@ export default function NightFlow() {
             <button className="btn" onClick={() => { setLeak(3.2); setDay(9); apply(3.2, 9) }}>{t('Rikthe demon', 'Reset demo')}</button>
           </div>
           <p className="note mt">{t(`Një rrjedhje ${fmt(leak, 1)} m³/h nuk shihet me sy në rrugë, por kushton rreth ${eur(leak * 24 * 365 * 0.25)} në vit me koston e prodhimit. Pa matës hyrjeje ajo zbulohet vetëm kur del në sipërfaqe.`, `A ${fmt(leak, 1)} m³/h leak is invisible on the street but costs about ${eur(leak * 24 * 365 * 0.25)} a year at production cost. Without an inlet meter it is only found when it surfaces.`)}</p>
-        </section>
+        </section>}
       </div>
     </div>
+  )
+}
+
+function MeasuredSource() {
+  const { t, kru } = useApp()
+  const a = kru?.telemetry.active
+  return (
+    <section className="panel">
+      <h2>{t('Burimi i të dhënave', 'Data source')}</h2>
+      <p className="sub">{t('Kjo faqe llogaritet mbi rrjedhjen hyrëse të matur nga loggerët e KRU-së. Simulatori i rrjedhjes është i fikur sepse nuk ndryshon të dhëna reale.',
+        "This page runs on the inlet flow measured by KRU's loggers. The leak simulator is off because it does not alter real data.")}</p>
+      {a && <dl className="kv">
+        <dt>{t('Skedari', 'File')}</dt><dd>{a.file || '–'}</dd>
+        <dt>{t('Ngarkuar', 'Uploaded')}</dt><dd className="num">{a.at?.replace('T', ' ') ?? '–'}</dd>
+        <dt>{t('Periudha', 'Period')}</dt><dd className="num">{a.from.slice(0, 16).replace('T', ' ')} – {a.to.slice(0, 16).replace('T', ' ')}</dd>
+        <dt>{t('Ditë të plota', 'Full days')}</dt><dd className="num">{a.days}</dd>
+      </dl>}
+      <Link className="btn mt" to="/te-dhenat">{t('Menaxho të dhënat', 'Manage data')}</Link>
+    </section>
   )
 }

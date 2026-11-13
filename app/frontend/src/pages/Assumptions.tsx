@@ -5,7 +5,7 @@ import { useApp, useData } from '../state'
 
 const SRC: Record<string, [string, string, string]> = {
   census: ['Regjistrimi 2024', '2024 census', 'done'], sourced: ['Me burim', 'Sourced', 'done'], literature: ['Literaturë', 'Literature', 'field'],
-  estimate: ['Vlerësim', 'Estimate', 'open'], assumption: ['Supozim', 'Assumption', 'open'],
+  estimate: ['Vlerësim', 'Estimate', 'open'], measured: ['Matur nga KRU', 'Measured by KRU', 'done'], assumption: ['Supozim', 'Assumption', 'open'],
 }
 
 export default function Assumptions() {
