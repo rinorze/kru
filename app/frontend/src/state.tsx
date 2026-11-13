@@ -60,6 +60,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         timer = window.setTimeout(connect, 4000)
       }
     }
+    // fill the gauges at once instead of waiting for the first stream message
+    fetch('/api/live').then(r => (r.ok ? r.json() : null)).then(v => { if (v) setLive(l => l ?? v) }).catch(() => undefined)
     connect()
     return () => { es?.close(); window.clearTimeout(timer) }
   }, [])

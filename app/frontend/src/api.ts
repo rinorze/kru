@@ -61,11 +61,36 @@ export interface Plan {
   methods?: { sq: string; en: string; src: string; url: string }[]
 }
 
+export interface BuildingDetail extends Building {
+  ref: string; hgl_m: number; p_now: number; p_prv: number; arru: 'over' | 'under' | 'ok'
+  customers: { code: string; avg: number; last: number; meter_year: number; gis: boolean; rule: Rule | null; lost_m3_month: number }[]
+  months: string[]; use: number[]; suspect: Suspect | null
+  sensors: { id: string; sq: string; en: string; distance_m: number }[]
+  orders: { id: number; kind: string; ref: string; title: string; status: WoStatus; created: string }[]
+  contracts: { number: string; customer_code: string; created: string; name: string }[]
+}
+export type UseType = 'household' | 'commercial' | 'institution'
+export interface RegistrationIn {
+  full_name: string; personal_no: string; phone: string; email: string; village: Village; address: string; building: string
+  use_type: UseType; persons: number; start_date: string; lang: 'sq' | 'en'; accept_terms: boolean; accept_data: boolean; signature: string
+}
+export interface Contract extends Omit<RegistrationIn, 'signature' | 'accept_terms' | 'accept_data'> {
+  number: string; customer_code: string; created: string; hash: string; prev_hash: string; tariff: number | null
+  signature?: string; verified?: boolean; full?: boolean; access?: string
+}
+
+/** A 422 from the API: the names of the fields that failed validation. */
+export class FieldError extends Error {
+  fields: string[]
+  constructor(fields: string[]) { super('Invalid: ' + fields.join(', ')); this.fields = fields }
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch('/api' + path, { headers: { 'Content-Type': 'application/json' }, ...init })
   if (!r.ok) {
     let msg = r.statusText
     try { msg = (await r.json()).detail ?? msg } catch { /* not json */ }
+    if (Array.isArray(msg)) throw new FieldError(msg.map((d: { loc: string[]; msg: string }) => d.loc[d.loc.length - 1]))
     throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
   }
   return r.json() as Promise<T>
@@ -96,4 +121,8 @@ export const api = {
   scenario: () => req<{ leak_m3h: number; leak_start_day: number | null }>('/scenario'),
   putScenario: (s: { leak_m3h: number; leak_start_day: number | null }) => req<{ leak_m3h: number; leak_start_day: number | null }>('/scenario', { method: 'PUT', body: JSON.stringify(s) }),
   plan: () => req<Plan>('/plan'),
+  building: (ref: string) => req<BuildingDetail>('/buildings/' + encodeURIComponent(ref)),
+  createContract: (f: RegistrationIn) => req<Contract>('/contracts', { method: 'POST', body: JSON.stringify(f) }),
+  contracts: () => req<Contract[]>('/contracts'),
+  contract: (number: string, k = '') => req<Contract>('/contracts/' + encodeURIComponent(number) + (k ? '?k=' + encodeURIComponent(k) : '')),
 }

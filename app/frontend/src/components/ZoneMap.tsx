@@ -1,8 +1,8 @@
 import L from 'leaflet'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useMemo, type ReactNode } from 'react'
 import { CircleMarker, GeoJSON, LayersControl, MapContainer, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet'
 import type { Sensor, Zone } from '../api'
-import { useApp } from '../state'
+import { fmt, useApp } from '../state'
 
 export interface Marker { key: string; lat: number; lon: number; color: string; r?: number; label?: string; popup?: ReactNode; onClick?: () => void; ring?: boolean }
 
@@ -24,12 +24,15 @@ export function FlyTo({ lat, lon, zoom = 17 }: { lat: number | null; lon: number
 
 const POI_ICON: Record<string, string> = { school: '#5B2AA6', hospital: '#B42318', place_of_worship: '#1E7F4F', fuel: '#9A6200', pharmacy: '#B42318' }
 
-export default function ZoneMap({ markers = [], size = '', showSensors = true, showPois = true, sensors = [], children }:
-  { markers?: Marker[]; size?: '' | 'tall' | 'short'; showSensors?: boolean; showPois?: boolean; sensors?: Sensor[]; children?: ReactNode }) {
-  const { zone, t } = useApp()
+export default function ZoneMap({ markers = [], size = '', showSensors = true, showPois = true, sensors = [], selected = null, children }:
+  { markers?: Marker[]; size?: '' | 'tall' | 'short'; showSensors?: boolean; showPois?: boolean; sensors?: Sensor[]
+    selected?: { lat: number; lon: number } | null; children?: ReactNode }) {
+  const { zone, t, live } = useApp()
+  // a wider click radius on the canvas renderer, so small building dots can be tapped on a phone
+  const renderer = useMemo(() => L.canvas({ tolerance: 7 }), [])
   return (
     <div className={'map ' + size}>
-      <MapContainer center={[42.862, 20.925]} zoom={14} preferCanvas style={{ height: '100%' }} scrollWheelZoom>
+      <MapContainer center={[42.862, 20.925]} zoom={14} renderer={renderer} style={{ height: '100%' }} scrollWheelZoom>
         <Fit zone={zone} />
         <LayersControl position="topright">
           <LayersControl.BaseLayer checked name={t('Harta (OSM)', 'Map (OSM)')}>
@@ -64,9 +67,12 @@ export default function ZoneMap({ markers = [], size = '', showSensors = true, s
         {showSensors && sensors.filter(s => s.lat !== null).map(s => (
           <CircleMarker key={s.id} center={[s.lat!, s.lon!]} radius={9} pathOptions={{ color: '#102A3A', weight: 3, fillColor: '#FFFFFF', fillOpacity: 1 }}>
             <Tooltip permanent direction="right" offset={[10, 0]}>{s.id.replace('DMA01-', '')}</Tooltip>
-            <Popup><b>{s.id}</b><br />{t(s.sq, s.en)}<br />{t('Kuota', 'Elevation')} {s.elev} m</Popup>
+            <Popup><b>{s.id}</b><br />{t(s.sq, s.en)}<br />{t('Kuota', 'Elevation')} {s.elev} m
+              {live?.values[s.id] !== undefined && <><br />{t('Tani', 'Now')}: <b>{fmt(live.values[s.id], 2)} {s.unit}</b> ({live.ts.slice(11)})</>}</Popup>
           </CircleMarker>
         ))}
+        {selected && <CircleMarker center={[selected.lat, selected.lon]} radius={13} interactive={false}
+          pathOptions={{ color: '#102A3A', weight: 3, fillOpacity: 0, dashArray: '3 3' }} />}
         {children}
       </MapContainer>
     </div>
