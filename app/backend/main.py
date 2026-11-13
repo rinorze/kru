@@ -16,12 +16,13 @@ import secrets
 import sqlite3
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+import imports
 import plan
 import sim
 
@@ -57,6 +58,58 @@ with db() as _c:
     # private key for the full contract (personal number and signature); only the signer receives it
     if "access" not in [col[1] for col in _c.execute("pragma table_info(contracts)")]:
         _c.execute("alter table contracts add column access text")
+    # KRU's own data, loaded from its exports through /api/data/import. When present it replaces the model.
+    _c.execute("create table if not exists imp_customers(code text primary key, village text, lat real, lon real, meter_year integer, address text)")
+    _c.execute("create table if not exists imp_readings(code text, period text, m3 real, primary key(code, period))")
+    _c.execute("create table if not exists telemetry(ts text, sensor text, value real, primary key(ts, sensor))")
+    _c.execute("create table if not exists imp_network(id integer primary key check(id = 1), geojson text, km real)")
+    _c.execute("""create table if not exists import_log(id integer primary key autoincrement, kind text, filename text,
+        accepted integer, rejected integer, at text)""")
+
+
+SENSOR_KIND = {s["id"]: s["kind"] for s in sim.SENSORS}
+_lats = [b["lat"] for b in sim.BUILDINGS]
+_lons = [b["lon"] for b in sim.BUILDINGS]
+BBOX = (min(_lats) - 0.01, min(_lons) - 0.013, max(_lats) + 0.01, max(_lons) + 0.013)  # the zone plus about 1 km
+
+
+def _last_import(con: sqlite3.Connection, *kinds: str) -> dict | None:
+    r = con.execute("select filename, at from import_log where kind in (%s) order by id desc limit 1" % ",".join("?" * len(kinds)), kinds).fetchone()
+    return {"file": r["filename"], "at": r["at"]} if r else None
+
+
+def reload_imports() -> None:
+    """Point the model at whatever KRU data is stored; anything missing stays modelled."""
+    with db() as con:
+        readings = [dict(r) for r in con.execute("select code, period, m3 from imp_readings")]
+        customers = [dict(r) for r in con.execute("select * from imp_customers")]
+        sim.use_billing(customers, readings or None, _last_import(con, "readings", "customers"))
+
+        n, t0, t1 = con.execute("select count(*), min(ts), max(ts) from telemetry").fetchone()
+        if n:
+            hourly = [(h, v) for h, v in con.execute(
+                "select substr(ts, 1, 13), avg(value) from telemetry where sensor = 'DMA01-Q-HYRJA' group by 1 order by 1")]
+            since = (dt.datetime.fromisoformat(t1) - dt.timedelta(days=7)).isoformat()
+            night = {}
+            for sid, kind in SENSOR_KIND.items():
+                if kind != "pressure":
+                    continue
+                vals = [v for (v,) in con.execute("select value from telemetry where sensor = ? and ts >= ? and substr(ts, 12, 2) in ('02', '03')", (sid, since))]
+                if vals:
+                    night[sid] = sorted(vals)[len(vals) // 2]
+            latest_rows = con.execute("select sensor, value, max(ts) as ts from telemetry group by sensor").fetchall()
+            latest = {"ts": max(r["ts"] for r in latest_rows), "values": {r["sensor"]: r["value"] for r in latest_rows}}
+            meta = {**(_last_import(con, "telemetry") or {}), "rows": n, "from": t0, "to": t1}
+            sim.use_telemetry(hourly, night, latest, meta)
+        else:
+            sim.use_telemetry(None, None, None, None)
+
+        net = con.execute("select geojson, km from imp_network").fetchone()
+        sim.use_network(json.loads(net["geojson"]) if net else None, net["km"] if net else 0.0,
+                        {**(_last_import(con, "network") or {}), "km": net["km"], "pipes": len(json.loads(net["geojson"])["features"])} if net else None)
+
+
+reload_imports()
 
 
 # ------------------------------------------------------------------ zone
@@ -104,7 +157,7 @@ def building(ref: str):
     custs = [{"code": c["code"], "avg": c["avg"], "last": c["m"][-1], "meter_year": c["meter_year"],
               "gis": c.get("gis", True), "rule": flagged[c["code"]]["rule"] if c["code"] in flagged else None,
               "lost_m3_month": flagged[c["code"]]["lost_m3_month"] if c["code"] in flagged else 0} for c in accounts]
-    use = [round(sum(c["m"][k] for c in accounts), 1) for k in range(12)]
+    use = [None if all(c["m"][k] is None for c in accounts) else round(sum(c["m"][k] or 0 for c in accounts), 1) for k in range(12)]
     suspect = next((s for s in sim.MISMATCH["suspects"] if s["id"] == "B-%d" % i), None)
     sensors = sorted(({"id": s["id"], "sq": s["sq"], "en": s["en"], "distance_m": round(sim.dist_m(b, s))}
                       for s in sim.SENSORS if s["lat"] is not None), key=lambda s: s["distance_m"])
@@ -235,11 +288,17 @@ def customer(code: str):
     if not c:
         raise HTTPException(404, "Customer not found")
     an = next((a for a in sim.ANOMALIES if a["code"] == code), None)
-    near = sorted(sim.CUSTOMERS, key=lambda o: sim.dist_m(c, o))[1:9]
-    peer = [round(sum(o["m"][k] for o in near) / 8, 1) for k in range(12)]
+    if c["lat"] is not None:
+        near = sorted((o for o in sim.CUSTOMERS if o["lat"] is not None), key=lambda o: sim.dist_m(c, o))[1:9]
+    else:  # no GIS point: compare with the customers of the same village
+        near = [o for o in sim.CUSTOMERS if o is not c and o["village"] == c["village"]]
+    peer = []
+    for k in range(12):
+        vals = [o["m"][k] for o in near if o["m"][k] is not None]
+        peer.append(round(sum(vals) / len(vals), 1) if vals else None)
     with db() as con:
         fr = [dict(r) for r in con.execute("select * from field_readings where code=? order by id desc", (code,))]
-    return {**{k: c[k] for k in ("code", "band", "village", "elev", "avg", "meter_year", "lat", "lon")},
+    return {**{k: c[k] for k in ("code", "band", "village", "elev", "avg", "meter_year", "lat", "lon", "bi")},
             "months": sim.MONTHS, "readings": c["m"], "peer": peer, "anomaly": an, "field_readings": fr}
 
 
@@ -325,7 +384,8 @@ def add_reading(r: ReadingIn):
     if not c:
         raise HTTPException(404, "Konsumatori nuk u gjet / Customer not found: %s" % r.code)
     warn = None
-    prev = sum(c["m"][:8]) / 8
+    hist = [x for x in c["m"][:8] if x is not None]
+    prev = sum(hist) / len(hist) if hist else 0
     if r.reading == 0:
         warn = "zero"
     elif prev and r.reading > 3 * prev:
@@ -333,7 +393,7 @@ def add_reading(r: ReadingIn):
     elif prev and r.reading < 0.4 * prev:
         warn = "low"
     far = None
-    if r.lat is not None and r.lon is not None:
+    if r.lat is not None and r.lon is not None and c["lat"] is not None:
         far = round(sim.dist_m({"lat": r.lat, "lon": r.lon}, c))
     with db() as con:
         con.execute("insert into field_readings(code,reading,lat,lon,note,ts) values(?,?,?,?,?,?)",
@@ -443,6 +503,98 @@ def get_contract(number: str, k: str = ""):
     chain_ok = r["prev_hash"] == (prev["hash"] if prev else "0" * 64)
     full = bool(k) and bool(r["access"]) and secrets.compare_digest(k, r["access"])
     return {**_contract_out(r, full), "verified": own_ok and chain_ok, "full": full}
+
+
+# ------------------------------------------------------------------ KRU data import
+TEMPLATES = {"customers": "code;village;lat;lon;meter_year;address", "readings": "code;period;m3",
+             "telemetry": "timestamp;sensor;value;unit"}
+
+
+def data_status() -> dict:
+    with db() as con:
+        cnt = lambda t: con.execute("select count(*) from %s" % t).fetchone()[0]
+        per_sensor = {r[0]: {"rows": r[1], "from": r[2], "to": r[3]} for r in
+                      con.execute("select sensor, count(*), min(ts), max(ts) from telemetry group by sensor")}
+        log = [dict(r) for r in con.execute("select * from import_log order by id desc limit 12")]
+        return {
+            "billing": {"active": sim.SOURCES["billing"], "customer_rows": cnt("imp_customers"), "reading_rows": cnt("imp_readings")},
+            "telemetry": {"active": sim.SOURCES["telemetry"] if sim.TELEMETRY or sim.LATEST else None, "flow_days": len(sim.TELEMETRY["days"]) if sim.TELEMETRY else 0,
+                          "sensors": per_sensor},
+            "network": {"active": sim.SOURCES["network"]},
+            "log": log,
+        }
+
+
+@app.get("/api/data/status")
+def get_data_status():
+    return data_status()
+
+
+@app.post("/api/data/import/{kind}")
+async def import_data(kind: str, request: Request, filename: str = "", replace: bool = False):
+    """Upload a file as the raw request body. customers and network replace what is stored;
+    readings and telemetry add to it (a repeated month or timestamp overwrites), unless replace=true."""
+    if kind not in ("customers", "readings", "telemetry", "network"):
+        raise HTTPException(404, "Lloj i panjohur të dhënash / Unknown data kind: %s" % kind)
+    raw = await request.body()
+    if not raw.strip():
+        raise HTTPException(400, "Skedari është bosh / The file is empty")
+    if len(raw) > 60 * 1024 * 1024:
+        raise HTTPException(413, "Skedari është mbi 60 MB; ndajeni në pjesë / The file is over 60 MB; split it")
+    now = dt.datetime.now().isoformat(timespec="seconds")
+    with db() as con:
+        if kind == "customers":
+            rows, errors = imports.parse_customers(raw, BBOX)
+            if rows:
+                con.execute("delete from imp_customers")
+                con.executemany("insert into imp_customers values(:code, :village, :lat, :lon, :meter_year, :address)", rows)
+        elif kind == "readings":
+            rows, errors = imports.parse_readings(raw)
+            if rows and replace:
+                con.execute("delete from imp_readings")
+            con.executemany("insert or replace into imp_readings values(:code, :period, :m3)", rows)
+        elif kind == "telemetry":
+            rows, errors = imports.parse_telemetry(raw, SENSOR_KIND)
+            if rows and replace:
+                con.execute("delete from telemetry")
+            con.executemany("insert or replace into telemetry values(?, ?, ?)", rows)
+        else:
+            gj, km, errors = imports.parse_network(raw, BBOX)
+            rows = gj["features"] if gj else []
+            if gj:
+                con.execute("insert or replace into imp_network values(1, ?, ?)", (json.dumps(gj, ensure_ascii=False), km))
+        con.execute("insert into import_log(kind, filename, accepted, rejected, at) values(?,?,?,?,?)",
+                    (kind, filename[:120], len(rows), len(errors), now))
+    reload_imports()
+    return {"kind": kind, "accepted": len(rows), "rejected": len(errors), "errors": errors[:imports.MAX_ERRORS], "status": data_status()}
+
+
+@app.delete("/api/data/{dataset}")
+def clear_data(dataset: str):
+    """Remove an imported dataset; that part of the panel goes back to the model."""
+    tables = {"billing": ["imp_customers", "imp_readings"], "telemetry": ["telemetry"], "network": ["imp_network"]}
+    if dataset not in tables:
+        raise HTTPException(404, "Unknown dataset: %s" % dataset)
+    with db() as con:
+        for t in tables[dataset]:
+            con.execute("delete from %s" % t)
+        con.execute("insert into import_log(kind, filename, accepted, rejected, at) values(?, '', 0, 0, ?)",
+                    ("clear-" + dataset, dt.datetime.now().isoformat(timespec="seconds")))
+    reload_imports()
+    return data_status()
+
+
+@app.get("/api/data/template/{kind}.csv")
+def template(kind: str):
+    if kind not in TEMPLATES:
+        raise HTTPException(404, "Unknown template")
+    return StreamingResponse(iter(["\ufeff" + TEMPLATES[kind] + "\r\n"]), media_type="text/csv",
+                             headers={"Content-Disposition": 'attachment; filename="kru_%s.csv"' % kind})
+
+
+@app.get("/api/network")
+def network():
+    return sim.NETWORK or {"type": "FeatureCollection", "features": []}
 
 
 # ------------------------------------------------------------------ plan, budget, exports
