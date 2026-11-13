@@ -11,6 +11,8 @@ import csv
 import datetime as dt
 import io
 import json
+import os
+import secrets
 import sqlite3
 from pathlib import Path
 
@@ -28,7 +30,7 @@ app = FastAPI(title="Kçiq DMA Panel API", version="1.0", docs_url="/api/docs", 
                           "Terrain and buildings are real; flows, pressures and customers are simulated.")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-DB = Path(__file__).parent / "kciq.db"
+DB = Path(os.environ.get("KCIQ_DB", Path(__file__).parent / "kciq.db"))
 
 
 def db() -> sqlite3.Connection:
@@ -43,6 +45,18 @@ with db() as _c:
         status text default 'open', note text default '', created text, updated text)""")
     _c.execute("""create table if not exists field_readings(
         id integer primary key autoincrement, code text, reading real, lat real, lon real, note text, ts text)""")
+    # Digital service contracts. Append-only: SQLite triggers refuse UPDATE and DELETE, and every row
+    # carries the SHA-256 of its content plus the previous row's hash, so any later edit breaks the chain.
+    _c.execute("""create table if not exists contracts(
+        id integer primary key autoincrement, number text unique, customer_code text unique, building text,
+        data text, signature text, created text, prev_hash text, hash text)""")
+    _c.execute("""create trigger if not exists contracts_no_update before update on contracts
+        begin select raise(abort, 'contracts are append-only'); end""")
+    _c.execute("""create trigger if not exists contracts_no_delete before delete on contracts
+        begin select raise(abort, 'contracts are append-only'); end""")
+    # private key for the full contract (personal number and signature); only the signer receives it
+    if "access" not in [col[1] for col in _c.execute("pragma table_info(contracts)")]:
+        _c.execute("alter table contracts add column access text")
 
 
 # ------------------------------------------------------------------ zone
@@ -66,6 +80,45 @@ def zone():
 @app.get("/api/buildings")
 def buildings():
     return sim.BUILDINGS
+
+
+def _building_index(ref: str) -> int:
+    """Accept 'B-123' or '123'."""
+    try:
+        i = int(ref.upper().removeprefix("B-"))
+    except ValueError:
+        raise HTTPException(404, "Ndërtesa nuk u gjet / Building not found: %s" % ref)
+    if not 0 <= i < len(sim.BUILDINGS):
+        raise HTTPException(404, "Ndërtesa nuk u gjet / Building not found: %s" % ref)
+    return i
+
+
+@app.get("/api/buildings/{ref}")
+def building(ref: str):
+    """Everything the panel knows about one building: terrain, pressure, accounts, flags, field work."""
+    i = _building_index(ref)
+    b = sim.BUILDINGS[i]
+    _, p0, p1 = sim.pressures(True, 3.0, "A")["points"][i]
+    flagged = {a["code"]: a for a in sim.ANOMALIES}
+    accounts = [c for c in sim.CUSTOMERS if c["bi"] == i]
+    custs = [{"code": c["code"], "avg": c["avg"], "last": c["m"][-1], "meter_year": c["meter_year"],
+              "gis": c.get("gis", True), "rule": flagged[c["code"]]["rule"] if c["code"] in flagged else None,
+              "lost_m3_month": flagged[c["code"]]["lost_m3_month"] if c["code"] in flagged else 0} for c in accounts]
+    use = [round(sum(c["m"][k] for c in accounts), 1) for k in range(12)]
+    suspect = next((s for s in sim.MISMATCH["suspects"] if s["id"] == "B-%d" % i), None)
+    sensors = sorted(({"id": s["id"], "sq": s["sq"], "en": s["en"], "distance_m": round(sim.dist_m(b, s))}
+                      for s in sim.SENSORS if s["lat"] is not None), key=lambda s: s["distance_m"])
+    with db() as con:
+        orders = [dict(r) for r in con.execute("select id,kind,ref,title,status,lat,lon,created from work_orders where status<>'done'")
+                  if r["lat"] is not None and sim.dist_m(b, {"lat": r["lat"], "lon": r["lon"]}) < 60]
+        contracts = [{"number": r["number"], "customer_code": r["customer_code"], "created": r["created"],
+                      "name": json.loads(r["data"])["full_name"]}
+                     for r in con.execute("select number,customer_code,created,data from contracts where building=? order by id", ("B-%d" % i,))]
+    hgl = sim.A("hgl_high_m") if b["band"] == "C" else sim.A("hgl_low_m")
+    return {**b, "ref": "B-%d" % i, "hgl_m": hgl, "p_now": p0, "p_prv": p1,
+            "arru": "over" if p0 > 7 else "under" if p0 < 1.5 else "ok",
+            "customers": custs, "months": sim.MONTHS, "use": use, "suspect": suspect,
+            "sensors": sensors, "orders": orders, "contracts": contracts}
 
 
 @app.get("/api/roads")
@@ -292,6 +345,104 @@ def add_reading(r: ReadingIn):
 def list_readings():
     with db() as con:
         return [dict(r) for r in con.execute("select * from field_readings order by id desc limit 100")]
+
+
+# ------------------------------------------------------------------ registration and digital contracts
+class RegistrationIn(BaseModel):
+    full_name: str = Field(min_length=3, max_length=120)
+    personal_no: str = Field(pattern=r"^\d{10}$")
+    phone: str = Field(pattern=r"^\+?[0-9 ]{8,18}$")
+    email: str = Field("", max_length=120, pattern=r"^$|^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    village: str = Field(pattern="^(Kçiq i Madh|Kçiq i Vogël)$")
+    address: str = Field(min_length=3, max_length=160)
+    building: str = Field("", max_length=12)
+    use_type: str = Field(pattern="^(household|commercial|institution)$")
+    persons: int = Field(1, ge=1, le=40)
+    start_date: dt.date
+    lang: str = Field("sq", pattern="^(sq|en)$")
+    accept_terms: bool
+    accept_data: bool
+    signature: str = Field(min_length=100, max_length=300_000, pattern=r"^data:image/png;base64,[A-Za-z0-9+/=]+$")
+
+
+def _contract_hash(number: str, code: str, building: str, data: str, signature: str, created: str, prev: str) -> str:
+    import hashlib
+    sig = hashlib.sha256(signature.encode()).hexdigest()
+    payload = json.dumps([number, code, building, data, sig, created, prev], ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _mask(pn: str) -> str:
+    return pn[:2] + "•" * 6 + pn[-2:]
+
+
+def _contract_out(r: sqlite3.Row, full: bool) -> dict:
+    d = json.loads(r["data"])
+    out = {"number": r["number"], "customer_code": r["customer_code"], "building": r["building"], "created": r["created"],
+           "hash": r["hash"], "prev_hash": r["prev_hash"], **d}
+    if full:
+        out["signature"] = r["signature"]
+    else:
+        out["personal_no"] = _mask(d["personal_no"])
+    return out
+
+
+@app.post("/api/contracts")
+def create_contract(f: RegistrationIn):
+    if not (f.accept_terms and f.accept_data):
+        raise HTTPException(400, "Duhet të pranoni kushtet dhe përpunimin e të dhënave / You must accept the terms and data processing")
+    if f.start_date < dt.date.today():
+        raise HTTPException(400, "Data e fillimit nuk mund të jetë në të kaluarën / The start date cannot be in the past")
+    building = ""
+    if f.building.strip():
+        bi = _building_index(f.building.strip())
+        building = "B-%d" % bi
+        if sim.BUILDINGS[bi]["village"] != f.village:
+            raise HTTPException(400, "Ndërtesa %s është në %s / Building %s is in %s" % (building, sim.BUILDINGS[bi]["village"], building, sim.BUILDINGS[bi]["village"]))
+    now = dt.datetime.now()
+    data = {"full_name": f.full_name.strip(), "personal_no": f.personal_no, "phone": f.phone.strip(), "email": f.email.strip(),
+            "village": f.village, "address": f.address.strip(), "use_type": f.use_type, "persons": f.persons,
+            "start_date": f.start_date.isoformat(), "lang": f.lang,
+            "tariff": sim.A("tariff") if f.use_type == "household" else None}
+    with db() as con:
+        for r in con.execute("select building,data from contracts where building=? and building<>''", (building,)):
+            if json.loads(r["data"])["personal_no"] == f.personal_no:
+                raise HTTPException(409, "Ky person ka tashmë kontratë për %s / This person already has a contract for %s" % (building, building))
+        last = con.execute("select id, hash from contracts order by id desc limit 1").fetchone()
+        seq = (last["id"] if last else 0) + 1
+        number = "KRU-MI-%d-%05d" % (now.year, seq)
+        code = "K-%d" % (20000 + seq)  # new accounts start at K-20001, after the 779 existing ones
+        created = now.isoformat(timespec="seconds")
+        prev = last["hash"] if last else "0" * 64
+        blob = json.dumps(data, ensure_ascii=False, sort_keys=True)
+        h = _contract_hash(number, code, building, blob, f.signature, created, prev)
+        access = secrets.token_urlsafe(16)
+        con.execute("insert into contracts(number,customer_code,building,data,signature,created,prev_hash,hash,access) values(?,?,?,?,?,?,?,?,?)",
+                    (number, code, building, blob, f.signature, created, prev, h, access))
+        return {**_contract_out(con.execute("select * from contracts where number=?", (number,)).fetchone(), True), "access": access}
+
+
+@app.get("/api/contracts")
+def list_contracts():
+    with db() as con:
+        return [_contract_out(r, False) for r in con.execute("select * from contracts order by id desc")]
+
+
+@app.get("/api/contracts/{number}")
+def get_contract(number: str, k: str = ""):
+    """One contract, with an integrity check: its own hash and the link to the contract before it.
+
+    Contract numbers are sequential, so without the signer's access key `k` the personal number
+    is masked and the signature withheld."""
+    with db() as con:
+        r = con.execute("select * from contracts where number=?", (number,)).fetchone()
+        if not r:
+            raise HTTPException(404, "Kontrata nuk u gjet / Contract not found: %s" % number)
+        prev = con.execute("select hash from contracts where id<? order by id desc limit 1", (r["id"],)).fetchone()
+    own_ok = _contract_hash(r["number"], r["customer_code"], r["building"], r["data"], r["signature"], r["created"], r["prev_hash"]) == r["hash"]
+    chain_ok = r["prev_hash"] == (prev["hash"] if prev else "0" * 64)
+    full = bool(k) and bool(r["access"]) and secrets.compare_digest(k, r["access"])
+    return {**_contract_out(r, full), "verified": own_ok and chain_ok, "full": full}
 
 
 # ------------------------------------------------------------------ plan, budget, exports
