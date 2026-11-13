@@ -1,0 +1,98 @@
+{
+ "zone": {
+  "name": "Kçiqi I Madh (zona kadastrale 71202012)",
+  "area_km2": 8.0,
+  "source": "Geoportali i Kosovës, AKK"
+ },
+ "villages": {
+  "Kçiq i Madh": {
+   "population": 2880,
+   "households": 552
+  },
+  "Kçiq i Vogël": {
+   "population": 1396,
+   "households": 227
+  }
+ },
+ "buildings": 788,
+ "buildings_by_village": {
+  "Kçiq i Madh": 558,
+  "Kçiq i Vogël": 230
+ },
+ "buildings_over_60m2": 677,
+ "elev_min": 510.0,
+ "elev_median": 542.9,
+ "elev_max": 673.4,
+ "elev_mean": 552.3,
+ "road_km_all": 35.0,
+ "road_km_local": 33.1,
+ "bands": {
+  "A": {
+   "buildings": 423,
+   "zmin": 510.0,
+   "zmax": 544.9
+  },
+  "B": {
+   "buildings": 276,
+   "zmin": 545.1,
+   "zmax": 591.7
+  },
+  "C": {
+   "buildings": 89,
+   "zmin": 595.2,
+   "zmax": 673.4
+  }
+ },
+ "sensors": [
+  {
+   "key": "KRIT",
+   "lat": 42.872787,
+   "lon": 20.926198,
+   "elev": 673.4
+  },
+  {
+   "key": "ULET",
+   "lat": 42.846592,
+   "lon": 20.926842,
+   "elev": 510.0
+  },
+  {
+   "key": "AZP",
+   "lat": 42.85925,
+   "lon": 20.932572,
+   "elev": 552.3
+  }
+ ],
+ "pois": [
+  {
+   "name": "Shkolla Fillore \"Bislim Imeri\" Kçiq i Madh",
+   "kind": "school",
+   "lat": 42.861143,
+   "lon": 20.924768
+  },
+  {
+   "name": "Ambulanta Shëndetsore Kçiq i Madh",
+   "kind": "hospital",
+   "lat": 42.861438,
+   "lon": 20.925071
+  },
+  {
+   "name": "Xhamia e Kçiqit",
+   "kind": "place_of_worship",
+   "lat": 42.86548,
+   "lon": 20.923513
+  },
+  {
+   "name": "Veda Petrol",
+   "kind": "fuel",
+   "lat": 42.85785,
+   "lon": 20.926584
+  },
+  {
+   "name": "RIGA Pharm",
+   "kind": "pharmacy",
+   "lat": 42.856153,
+   "lon": 20.931463
+  }
+ ]
+}

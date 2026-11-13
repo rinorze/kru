@@ -1,0 +1,8 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {"name": "kciq-app", "runtimeExecutable": "python", "runtimeArgs": ["-m", "uvicorn", "main:app", "--app-dir", "app/backend", "--port", "8000"], "port": 8000},
+    {"name": "kciq-web-dev", "runtimeExecutable": "npm", "runtimeArgs": ["--prefix", "app/frontend", "run", "dev"], "port": 5173},
+    {"name": "kciq-dashboard", "runtimeExecutable": "python", "runtimeArgs": ["-m", "http.server", "8765", "--directory", "dashboard"], "port": 8765}
+  ]
+}
