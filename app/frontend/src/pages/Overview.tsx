@@ -1,8 +1,63 @@
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import ProfileChart from '../components/ProfileChart'
-import { Loading, PageHead, Stat } from '../components/ui'
+import { Loading } from '../components/ui'
 import { eur, fmt, useApp, useData } from '../state'
+
+const FRESH_MS = 90 * 60 * 1000  // loggers usually send hourly; older than this is flagged as stale
+
+/** The four live sensors, ordered from the bottom of the zone to the top, with the ground level they sit at. */
+function LiveSensors() {
+  const { t, live, liveOk, sensors } = useApp()
+  const v = live?.values ?? {}
+  const elev = (id: string) => sensors.find(s => s.id === id)?.elev
+  const rows: [string, string, string, number][] = [
+    ['DMA01-Q-HYRJA', t('Matësi i hyrjes', 'Inlet meter'), 'm³/h', 1],
+    ['DMA01-P-ULET', t('Pika më e ulët', 'Lowest point'), 'bar', 2],
+    ['DMA01-P-AZP', t('Pika mesatare', 'Average point'), 'bar', 2],
+    ['DMA01-P-KRIT', t('Pika kritike', 'Critical point'), 'bar', 2],
+  ]
+  let state = t('Duke u lidhur…', 'Connecting…')
+  if (live && !liveOk) state = t('Pa lidhje', 'Offline')
+  else if (live?.source === 'measured') {
+    const stamp = live.ts.slice(0, 16).replace('T', ' ')
+    state = Date.now() - new Date(live.ts).getTime() < FRESH_MS ? t(`Matur, ${stamp.slice(11)}`, `Measured, ${stamp.slice(11)}`) : t(`Leximi i fundit ${stamp}`, `Last reading ${stamp}`)
+  } else if (live) state = t('Simulim live, çdo 2 s', 'Simulated live, every 2 s')
+  return (
+    <div className="live" aria-live="polite">
+      <p className="live-state"><span className={'led' + (live && liveOk ? ' on' : '')} />{state}</p>
+      <dl>
+        {rows.map(([id, label, unit, d]) => (
+          <div key={id}>
+            <dt>{label}{elev(id) != null && <small>{fmt(elev(id))} m</small>}</dt>
+            <dd className="num">{v[id] !== undefined ? fmt(v[id], d) : '–'}<i>{unit}</i></dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  )
+}
+
+function DataNote() {
+  const { t, kru } = useApp()
+  const real: string[] = [], model: string[] = []
+  const put = (on: boolean, sq: string, en: string) => (on ? real : model).push(t(sq, en))
+  const tel = kru?.telemetry
+  put(!!kru?.billing.active, 'konsumatorët dhe faturimi', 'customers and billing')
+  put(!!tel?.active, 'presionet dhe matësit live', 'pressures and live gauges')
+  put(!!tel && tel.flow_days >= 3, 'rrjedha hyrëse dhe e natës', 'inlet and night flow')
+  put(!!kru?.network.active, 'rrjeti i tubave', 'the pipe network')
+  if (!kru) return null
+  return (
+    <p className={'data-note' + (model.length ? '' : ' real')}>
+      {t('Terreni, ndërtesat, rrugët dhe kufiri janë të vërteta (OSM, EU-DEM, Geoportali). ', 'Terrain, buildings, roads and the boundary are real (OSM, EU-DEM, Geoportal). ')}
+      {real.length > 0 && <>{t('Nga KRU: ', 'From KRU: ')}{real.join(', ')}. </>}
+      {model.length > 0
+        ? <>{t('Ende të simuluara: ', 'Still simulated: ')}{model.join(', ')}. <Link to="/te-dhenat">{t('Ngarko të dhënat e KRU-së', "Upload KRU's data")}</Link></>
+        : t('Vlerësimet e mbetura janë te Supozimet.', 'The remaining estimates are listed under Assumptions.')}
+    </p>
+  )
+}
 
 export default function Overview() {
   const { t, zone, buildings } = useApp()
@@ -16,85 +71,100 @@ export default function Overview() {
 
   const alerts = [
     fl.data?.alarm && {
-      color: 'var(--alarm)', to: '/nata',
+      tone: 'alarm', to: '/nata', cta: t('Shiko rrjedhën e natës', 'See night flow'),
       h: t(`Rrjedha e natës u rrit që nga ${fl.data.alarm.since}`, `Night flow up since ${fl.data.alarm.since}`),
-      p: t(`+${fmt(fl.data.alarm.extra_m3h, 1)} m³/h mbi bazën, rreth ${fmt(fl.data.alarm.extra_m3d)} m³/ditë. Rrjedhje e re e mundshme. Kosto ${eur(fl.data.alarm.cost_year)}/vit nëse nuk riparohet.`,
-        `+${fmt(fl.data.alarm.extra_m3h, 1)} m³/h above baseline, about ${fmt(fl.data.alarm.extra_m3d)} m³/day. Likely a new leak. Costs ${eur(fl.data.alarm.cost_year)}/year if left.`),
+      p: t(`+${fmt(fl.data.alarm.extra_m3h, 1)} m³/h mbi bazën, rreth ${fmt(fl.data.alarm.extra_m3d)} m³ në ditë. Ka gjasa për një rrjedhje të re; kushton ${eur(fl.data.alarm.cost_year)} në vit nëse nuk riparohet.`,
+        `+${fmt(fl.data.alarm.extra_m3h, 1)} m³/h above baseline, about ${fmt(fl.data.alarm.extra_m3d)} m³ a day. Likely a new leak; it costs ${eur(fl.data.alarm.cost_year)} a year if left.`),
     },
     p && {
-      color: 'var(--band-a)', to: '/presioni',
-      h: t(`${fmt(p.arru_over_now)} ndërtesa mbi 7 bar`, `${fmt(p.arru_over_now)} buildings above 7 bar`),
-      p: t('Rregulla ARRU 02/2016 lejon 1,5–7 bar te lidhja. Brezi A në fund të fshatit është më i ekspozuari.', 'ARRU Rule 02/2016 allows 1.5–7 bar at the connection. Band A at the bottom of the village is the most exposed.'),
+      tone: 'band-a', to: '/presioni', cta: t('Provo një PRV', 'Try a PRV'),
+      h: t(`${fmt(p.arru_over_now)} ndërtesa marrin mbi 7 bar`, `${fmt(p.arru_over_now)} buildings get more than 7 bar`),
+      p: t('ARRU lejon 1,5–7 bar te lidhja. Brezi A, në fund të fshatit, është më i ekspozuari.', 'ARRU allows 1.5–7 bar at the connection. Band A, at the bottom of the village, is the most exposed.'),
     },
     an.data && {
-      color: 'var(--warn)', to: '/anomalite',
+      tone: 'warn', to: '/anomalite', cta: t('Shiko ujëmatësit', 'See the meters'),
       h: t(`${an.data.rows.length} ujëmatës me lexime të dyshimta`, `${an.data.rows.length} meters with suspicious readings`),
-      p: t(`Rreth ${fmt(an.data.lost_m3_month)} m³/muaj të pafaturuar, ${eur(an.data.lost_eur_year)}/vit me tarifën 0,53 €/m³.`, `About ${fmt(an.data.lost_m3_month)} m³/month unbilled, ${eur(an.data.lost_eur_year)}/year at the €0.53/m³ tariff.`),
+      p: t(`Rreth ${fmt(an.data.lost_m3_month)} m³ në muaj pa u faturuar, ${eur(an.data.lost_eur_year)} në vit.`, `About ${fmt(an.data.lost_m3_month)} m³ a month unbilled, ${eur(an.data.lost_eur_year)} a year.`),
     },
     mm.data && {
-      color: '#5B2AA6', to: '/faturim-gis',
+      tone: 'violet', to: '/faturim-gis', cta: t('Shiko banesat', 'See the dwellings'),
       h: t(`${mm.data.suspects.length} banesa pa kontratë uji`, `${mm.data.suspects.length} dwellings with no water contract`),
-      p: t(`Ndërtesa mbi 60 m² që nuk kanë konsumator në faturim. Kandidatë për lidhje ilegale. ${mm.data.no_gis.length} konsumatorë nuk kanë pikë në GIS.`, `Buildings over 60 m² with no billing customer. Candidates for illegal connections. ${mm.data.no_gis.length} customers have no GIS point.`),
+      p: t(`Ndërtesa mbi 60 m² pa konsumator në faturim, të dyshuara për lidhje ilegale. ${mm.data.no_gis.length} konsumatorë nuk kanë pikë në GIS.`, `Buildings over 60 m² with no billing customer, suspected illegal connections. ${mm.data.no_gis.length} customers have no GIS point.`),
     },
-  ].filter(Boolean) as { color: string; to: string; h: string; p: string }[]
+  ].filter(Boolean) as { tone: string; to: string; cta: string; h: string; p: string }[]
 
   return (
-    <div className="page">
-      <PageHead
-        title={t('Zona pilot DMA01: Kçiq i Madh dhe Kçiq i Vogël', 'Pilot zone DMA01: Kçiq i Madh and Kçiq i Vogël')}
-        lead={t('Dy fshatra në një zonë kadastrale, 160 m ndryshim lartësie nga lugina e Sitnicës deri në kodër. Ky panel tregon ku humbet uji, pse, dhe çfarë kursen një valvul reduktuese presioni.',
-          'Two villages in one cadastral zone, with 160 m of height difference from the Sitnica valley to the hilltop. This panel shows where water is lost, why, and what one pressure-reducing valve saves.')}
-      />
-      {!b ? <Loading error={bal.error} /> : (
-        <div className="strip">
-          <Stat label={t('Uji pa të ardhura', 'Non-revenue water')} value={fmt(b.nrw_pct, 1)} unit="%" tone="bad" delta={t('KRU 2025: 49% kompania, 64% Mitrovica', 'KRU 2025: 49% company, 64% Mitrovica')} />
-          <Stat label={t('Humbje reale', 'Real losses')} value={fmt(b.real)} unit="m³/d" delta={`${fmt(b.real_l_conn_day)} l/${t('lidhje/ditë', 'conn/day')}`} />
-          <Stat label="ILI" value={fmt(b.ili, 1)} delta={t(`Kategoria ${b.ili_band} e Bankës Botërore`, `World Bank band ${b.ili_band}`)} />
-          <Stat label={t('Vlera e humbur në vit', 'Value lost per year')} value={eur(b.value_tariff)} delta={t('me tarifën familjare', 'at the household tariff')} />
-          {p && <Stat label={t('Kursimi me një PRV', 'Saving with one PRV')} value={eur(p.saved_eur)} unit={t('/vit', '/yr')} tone="good" delta={t(`kthim në ${fmt(p.payback_months ?? 0, 1)} muaj`, `payback in ${fmt(p.payback_months ?? 0, 1)} months`)} />}
+    <div className="page overview">
+      <section className="hero" aria-labelledby="hero-h">
+        <div className="hero-text">
+          <span className="eyebrow">{t('Një ide: DMA inteligjente për Kçiqin', 'One idea: an intelligent DMA for Kçiq')}</span>
+          <h1 id="hero-h">{t('Kçiq humb 69,9% të ujit që hyn në zonë', 'Kçiq loses 69.9% of the water that enters the zone')}</h1>
+          <p>{t('Matësi i zonës (shkurt–shtator 2026) tregon 1.599 m³ në ditë hyrje dhe vetëm 481 m³ të faturuar [MATUR]. Natën konsumi bie pothuajse në zero, por uji vazhdon të hyjë: shumica e humbjes është rrjedhje fizike, e shtyrë nga presioni deri në 12,6 bar.',
+            'The zone meter (February–September 2026) shows 1,599 m³ a day going in and only 481 m³ billed [MEASURED]. At night use falls almost to zero but water keeps flowing in: most of the loss is physical leakage, driven by pressure of up to 12.6 bar.')}</p>
+          <ol className="phases">
+            <li><b>{t('Faza 1 · muaji 1–3', 'Phase 1 · months 1–3')}</b>{t('Gjej rrjedhjet: riparo telemetrinë, rrjedha e natës çdo 15 min, teste hap pas hapi, logger akustik, riparime.', 'Find the leaks: repair telemetry, night flow every 15 min, step tests, acoustic loggers, repairs.')} <Link to="/24-oret">{t('Uji në 24 orë', 'Water over 24 h')} →</Link></li>
+            <li><b>{t('Faza 2 · muaji 4–6', 'Phase 2 · months 4–6')}</b>{t('Ul presionin: zona presioni me PRV, së pari Z17 dhe Z7 mbi 9 bar, që rrjedhjet të mos kthehen.', 'Cut the pressure: pressure zones with PRVs, first Z17 and Z7 above 9 bar, so leaks do not come back.')} <Link to="/zonat">{t('Harta e zonave', 'Zone map')} →</Link></li>
+          </ol>
+          <p className="target">{t('Objektivi pas 6 muajsh: NRW nga 70% në ≤ 45%, rreth 400 m³ më pak humbje në ditë [VLERËSUAR].', 'Target after 6 months: NRW from 70% to ≤ 45%, about 400 m³ less lost per day [ESTIMATED].')}</p>
         </div>
-      )}
+        <LiveSensors />
+        <div className="hero-chart">
+          <ProfileChart buildings={buildings} pressure={p} height={280} dark />
+        </div>
+      </section>
+      <DataNote />
 
-      <div className="grid g-side mt">
-        <section className="panel">
-          <h2>{t('Pse humbet uji këtu: presioni', 'Why water is lost here: pressure')}</h2>
-          <p className="sub">{t('Çdo ndërtesë e zonës, e renditur sipas kuotës. Rezervuari e mban vijën piezometrike në 620 m, kështu që shtëpitë poshtë kanë 8–11 bar. Vija blu tregon efektin e një PRV-je në 3 bar për brezin A.',
-            'Every building in the zone, sorted by ground level. The reservoir holds the hydraulic grade at 620 m, so houses at the bottom see 8–11 bar. The blue line shows one PRV at 3 bar on band A.')}</p>
-          <ProfileChart buildings={buildings} pressure={p} height={300} />
-          <Link className="btn" to="/presioni">{t('Hap simulatorin e presionit', 'Open the pressure simulator')}</Link>
-        </section>
-        <section className="panel">
-          <h2>{t('Çka kërkon veprim', 'Needs action')}</h2>
-          <ul className="alerts">
+      <div className="ov-grid">
+        <section aria-labelledby="todo-h">
+          <h2 id="todo-h">{t('Çka kërkon veprim', 'Needs action')}</h2>
+          <ul className="todo">
             {alerts.map(a => (
-              <li key={a.to}>
-                <span className="bar" style={{ background: a.color }} />
-                <div><h3 style={{ margin: 0 }}>{a.h}</h3><p>{a.p}</p></div>
-                <Link className="btn small" to={a.to}>{t('Shiko', 'View')}</Link>
+              <li key={a.to} className={a.tone}>
+                <div><h3>{a.h}</h3><p>{a.p}</p></div>
+                <Link className="btn" to={a.to}>{a.cta}</Link>
               </li>
             ))}
           </ul>
         </section>
+        <section aria-labelledby="fig-h">
+          <h2 id="fig-h">{t('Bilanci i 7 ditëve të fundit', 'The last 7 days in balance')}</h2>
+          {!b ? <Loading error={bal.error} /> : (
+            <dl className="figs">
+              <div className="bad"><dt>{t('Uji pa të ardhura', 'Non-revenue water')}</dt><dd className="num">{fmt(b.nrw_pct, 1)}<i>%</i></dd>
+                <small>{t('KRU 2025: 49% kompania, 64% njësia Mitrovicë', 'KRU 2025: 49% company-wide, 64% Mitrovica unit')}</small></div>
+              <div><dt>{t('Humbje reale', 'Real losses')}</dt><dd className="num">{fmt(b.real)}<i>m³/d</i></dd>
+                <small>{fmt(b.real_l_conn_day)} {t('litra për lidhje në ditë', 'litres per connection a day')}</small></div>
+              <div><dt>{t('Indeksi i rrjedhjeve (ILI)', 'Leakage index (ILI)')}</dt><dd className="num">{fmt(b.ili, 1)}</dd>
+                <small>{t(`Kategoria ${b.ili_band} e Bankës Botërore`, `World Bank band ${b.ili_band}`)}</small></div>
+              <div><dt>{t('Vlera e humbur në vit', 'Value lost per year')}</dt><dd className="num">{eur(b.value_tariff)}</dd>
+                <small>{t('me tarifën familjare 0,53 €/m³', 'at the €0.53/m³ household tariff')}</small></div>
+            </dl>
+          )}
+          <Link className="btn" to="/bilanci">{t('Hap bilancin e plotë', 'Open the full balance')}</Link>
+        </section>
       </div>
 
       {zone && (
-        <section className="panel mt flush">
-          <table className="data">
-            <thead><tr>
-              <th>{t('Fshati', 'Village')}</th><th className="r">{t('Banorë 2024', 'People 2024')}</th><th className="r">{t('Ekonomi familjare', 'Households')}</th>
-              <th className="r">{t('Ndërtesa (OSM)', 'Buildings (OSM)')}</th><th className="r">{t('Konsumatorë', 'Customers')}</th><th className="r">{t('Kuota', 'Elevation')}</th>
-            </tr></thead>
-            <tbody>
-              {Object.entries(zone.villages).map(([name, v]) => (
-                <tr key={name}><td><b>{name}</b></td><td className="r num">{fmt(v.population)}</td><td className="r num">{fmt(v.households)}</td>
-                  <td className="r num">{fmt(v.buildings)}</td><td className="r num">{fmt(v.customers)}</td><td className="r num">{fmt(v.elev_min)}–{fmt(v.elev_max)} m</td></tr>
-              ))}
-              <tr><td><b>{t('Gjithsej', 'Total')}</b></td><td className="r num"><b>{fmt(zone.population)}</b></td><td className="r num"><b>{fmt(zone.households)}</b></td>
-                <td className="r num"><b>{fmt(zone.buildings)}</b></td><td className="r num"><b>{fmt(Object.values(zone.villages).reduce((s, v) => s + v.customers, 0))}</b></td>
-                <td className="r num">{fmt(zone.elev_min)}–{fmt(zone.elev_max)} m</td></tr>
-            </tbody>
-          </table>
-          <p className="note" style={{ padding: '8px 12px', margin: 0 }}>
+        <section className="mt" aria-labelledby="zone-h">
+          <h2 id="zone-h">{t('Dy fshatrat e zonës', 'The two villages')}</h2>
+          <div className="panel flush">
+            <table className="data">
+              <thead><tr>
+                <th>{t('Fshati', 'Village')}</th><th className="r">{t('Banorë 2024', 'People 2024')}</th><th className="r">{t('Ekonomi familjare', 'Households')}</th>
+                <th className="r">{t('Ndërtesa', 'Buildings')}</th><th className="r">{t('Konsumatorë', 'Customers')}</th><th className="r">{t('Kuota', 'Elevation')}</th>
+              </tr></thead>
+              <tbody>
+                {Object.entries(zone.villages).map(([name, v]) => (
+                  <tr key={name}><td><b>{name}</b></td><td className="r num">{fmt(v.population)}</td><td className="r num">{fmt(v.households)}</td>
+                    <td className="r num">{fmt(v.buildings)}</td><td className="r num">{fmt(v.customers)}</td><td className="r num">{fmt(v.elev_min)}–{fmt(v.elev_max)} m</td></tr>
+                ))}
+                <tr className="total"><td>{t('Gjithsej', 'Total')}</td><td className="r num">{fmt(zone.population)}</td><td className="r num">{fmt(zone.households)}</td>
+                  <td className="r num">{fmt(zone.buildings)}</td><td className="r num">{fmt(Object.values(zone.villages).reduce((s, v) => s + v.customers, 0))}</td>
+                  <td className="r num">{fmt(zone.elev_min)}–{fmt(zone.elev_max)} m</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="note">
             {t(`Burimi: ASK, Regjistrimi 2024. Zona kadastrale ${zone.cadastral_zone.name}, ${fmt(zone.cadastral_zone.area_km2, 1)} km², ${fmt(zone.road_km, 1)} km rrugë.`,
               `Source: KAS, 2024 census. Cadastral zone ${zone.cadastral_zone.name}, ${fmt(zone.cadastral_zone.area_km2, 1)} km², ${fmt(zone.road_km, 1)} km of roads.`)}
           </p>

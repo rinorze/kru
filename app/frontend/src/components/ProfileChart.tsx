@@ -7,8 +7,8 @@ import { fmt, useApp } from '../state'
  * Above it sit the hydraulic grade lines (now, and after the PRV) and the ARRU service corridor
  * (1.5 to 7 bar above the ground). Where the blue line leaves the green corridor the law is broken.
  */
-export default function ProfileChart({ buildings, pressure, height = 340, compact = false }:
-  { buildings: Building[]; pressure: Pressure | null; height?: number; compact?: boolean }) {
+export default function ProfileChart({ buildings, pressure, height = 340, compact = false, dark = false }:
+  { buildings: Building[]; pressure: Pressure | null; height?: number; compact?: boolean; dark?: boolean }) {
   const { t } = useApp()
   const [hover, setHover] = useState<number | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -72,7 +72,7 @@ export default function ProfileChart({ buildings, pressure, height = 340, compac
 
   return (
     <div>
-      <svg ref={svgRef} className="profile" viewBox={`0 0 ${W} ${H}`} role="img"
+      <svg ref={svgRef} className={'profile' + (dark ? ' dark' : '')} viewBox={`0 0 ${W} ${H}`} role="img"
         aria-label={t('Profili i terrenit dhe i presionit për çdo ndërtesë', 'Terrain and pressure profile for every building')}
         onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
         <defs>
@@ -95,25 +95,25 @@ export default function ProfileChart({ buildings, pressure, height = 340, compac
             <text x={pad.l - 8} y={y(z) + 4} textAnchor="end">{z} m</text>
           </g>
         ))}
-        <path d={corridor} fill="#1E7F4F" opacity=".13" />
-        <path d={terrain} fill="#C9BFAE" stroke="#8C7F6A" strokeWidth="1" />
+        <path d={corridor} className="corridor" />
+        <path d={terrain} className="terrain" strokeWidth="1" />
         {overPath && <path d={overPath} fill="url(#hatch)" />}
-        <path d={now} fill="none" stroke="#102A3A" strokeWidth="1.6" strokeDasharray={changed ? '5 4' : undefined} opacity={changed ? 0.7 : 1} />
-        {changed && <path d={next} fill="none" stroke="#1D6FA5" strokeWidth="2.6" />}
+        <path d={now} className="hgl-now" fill="none" strokeWidth="1.6" strokeDasharray={changed ? '5 4' : undefined} opacity={changed ? 0.7 : 1} />
+        {changed && <path d={next} className="hgl-next" fill="none" strokeWidth="2.6" />}
         {h && hover !== null && (
           <g>
-            <line x1={x(hover)} x2={x(hover)} y1={pad.t} y2={y(zmin)} stroke="#102A3A" strokeWidth="1" />
+            <line x1={x(hover)} x2={x(hover)} y1={pad.t} y2={y(zmin)} className="hgl-now" strokeWidth="1" />
             <circle cx={x(hover)} cy={y(h.b.elev)} r="4" fill="#8C7F6A" />
-            <circle cx={x(hover)} cy={y(h.b.elev + h.p1 * 10.2)} r="4.5" fill="#1D6FA5" />
+            <circle cx={x(hover)} cy={y(h.b.elev + h.p1 * 10.2)} r="4.5" className="hgl-dot" />
           </g>
         )}
       </svg>
       {!compact && (
         <div className="legend">
-          <span className="chip"><span className="dot" style={{ background: '#C9BFAE', borderRadius: 2 }} />{t('Terreni nën secilën ndërtesë (EU-DEM)', 'Ground under each building (EU-DEM)')}</span>
-          <span className="chip"><span className="dot" style={{ background: 'rgba(30,127,79,.3)', borderRadius: 2 }} />{t('Korridori ARRU 1,5–7 bar', 'ARRU corridor 1.5–7 bar')}</span>
-          <span className="chip"><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="#102A3A" strokeWidth="2" strokeDasharray={changed ? '5 4' : undefined} /></svg>{t('Kuota piezometrike tani', 'Hydraulic grade now')}</span>
-          {changed && <span className="chip"><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="#1D6FA5" strokeWidth="3" /></svg>{t('Pas PRV-së', 'After the PRV')}</span>}
+          <span className="chip"><span className="dot swatch-terrain" />{t('Terreni nën secilën ndërtesë (EU-DEM)', 'Ground under each building (EU-DEM)')}</span>
+          <span className="chip"><span className="dot" style={{ background: dark ? 'rgba(88,196,140,.45)' : 'rgba(30,127,79,.3)', borderRadius: 2 }} />{t('Korridori ARRU 1,5–7 bar', 'ARRU corridor 1.5–7 bar')}</span>
+          <span className="chip"><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" className="hgl-now" strokeWidth="2" strokeDasharray={changed ? '5 4' : undefined} /></svg>{t('Kuota piezometrike tani', 'Hydraulic grade now')}</span>
+          {changed && <span className="chip"><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" className="hgl-next" strokeWidth="3" /></svg>{t('Pas PRV-së', 'After the PRV')}</span>}
           <span className="chip"><span className="dot" style={{ background: 'url(#hatch)', border: '1px solid #B5304A', borderRadius: 2 }} />{changed ? t('Mbi 7 bar pas PRV-së', 'Above 7 bar after the PRV') : t('Mbi 7 bar', 'Above 7 bar')}</span>
         </div>
       )}

@@ -103,8 +103,8 @@ export default function MapPage() {
   return (
     <div className="page">
       <PageHead title={t('Harta GIS e zonës', 'Zone GIS map')}
-        lead={t('Kliko çdo ndërtesë për të parë kuotën, presionin, konsumatorët, anomalitë dhe kontratat. Kufiri kadastral 71202012 vjen nga Geoportali i Kosovës, 788 ndërtesat nga OpenStreetMap me kuotë nga EU-DEM.',
-          'Click any building to see its elevation, pressure, customers, anomalies and contracts. Cadastral boundary 71202012 from the Kosovo Geoportal, 788 OpenStreetMap buildings with EU-DEM elevation.')}
+        lead={t('Kliko një ndërtesë për kuotën, presionin, konsumatorët, anomalitë dhe kontratat e saj.',
+          'Click a building to see its elevation, pressure, customers, anomalies and contracts.')}
         actions={<a className="btn" href="/kciq_layers.geojson" download>{t('Shkarko GeoJSON', 'Download GeoJSON')}</a>} />
       <div className="map-tools">
         <form className="map-search" onSubmit={search} role="search">
@@ -115,15 +115,18 @@ export default function MapPage() {
         <Seg label={t('Ngjyrosja', 'Colouring')} value={mode} onChange={setMode} options={[
           { v: 'band', label: t('Brezi', 'Band') }, { v: 'village', label: t('Fshati', 'Village') },
           { v: 'p0', label: t('Presioni tani', 'Pressure now') }, { v: 'p1', label: t('Pas PRV', 'After PRV') }]} />
+        <details className="layers-pop">
+          <summary className="btn">{t('Shtresat', 'Layers')} <span className="note">{Object.entries(layers).filter(([k, v]) => v && (k !== 'network' || pipes)).length}/{pipes ? 8 : 7}</span></summary>
+          <div className="layers-list">
+            {([...(pipes ? [['network', t('Rrjeti i tubave', 'Pipe network')] as const] : []), ['buildings', t('Ndërtesat', 'Buildings')], ['anomalies', t('Anomalitë', 'Anomalies')], ['suspects', t('Pa kontratë', 'No contract')],
+              ['contracts', t('Kontrata të reja', 'New contracts')], ['workorders', t('Urdhrat e hapur', 'Open orders')], ['sensors', t('Sensorët', 'Sensors')],
+              ['pois', t('Objektet publike', 'Public buildings')]] as const).map(([k, l]) => (
+              <label key={k} className="check"><input type="checkbox" checked={layers[k]} onChange={() => toggle(k)} />{l}</label>
+            ))}
+          </div>
+        </details>
       </div>
-      <div className="map-tools layers">
-        {([...(pipes ? [['network', t('Rrjeti i tubave', 'Pipe network')] as const] : []), ['buildings', t('Ndërtesat', 'Buildings')], ['anomalies', t('Anomalitë', 'Anomalies')], ['suspects', t('Pa kontratë', 'No contract')],
-          ['contracts', t('Kontrata të reja', 'New contracts')], ['workorders', t('Urdhrat e hapur', 'Open orders')], ['sensors', t('Sensorët', 'Sensors')],
-          ['pois', t('Objektet publike', 'Public buildings')]] as const).map(([k, l]) => (
-          <label key={k} className="check" style={{ margin: 0 }}><input type="checkbox" checked={layers[k]} onChange={() => toggle(k)} />{l}</label>
-        ))}
-      </div>
-      <div className="legend" style={{ marginBottom: 10 }}>
+      <div className="legend map-legend">
         {legend[mode].map(x => <span key={x.l} className="chip"><span className="dot" style={{ background: x.c }} />{x.l}</span>)}
         <span className="chip"><span className="dot ringed" style={{ background: '#B42318' }} />{t('Anomali', 'Anomaly')}</span>
         <span className="chip"><span className="dot ringed" style={{ background: '#5B2AA6' }} />{t('Banesë pa kontratë', 'Dwelling with no contract')}</span>
