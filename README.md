@@ -91,7 +91,6 @@ Logger night pressure (02:00–04:00) also calibrates the hydraulic grade used f
 app/
   backend/    FastAPI + SQLite. sim.py is the zone model, imports.py the file parsers, main.py the API, plan.py the pilot plan
   frontend/   React 19 + Vite + TypeScript. Leaflet maps, Recharts charts, plain CSS design tokens
-dashboard/    earlier static prototype
 docs/         screenshots (before/after the UI work)
 Kciq_Research_Report.md   research behind the model and the pilot plan
 ```
@@ -125,11 +124,12 @@ Set `KCIQ_DB` to put the database somewhere other than `app/backend/kciq.db`.
 cd app/backend && python -m pytest -q
 ```
 
-The 15 API tests cover the following:
+The 16 API tests cover the following:
 
 - **Model:** the water balance identity, PRV savings, and the minimum-pressure constraint.
 - **Records:** the anomaly and mismatch detection, the work-order lifecycle, and field-reading checks.
 - **Map and contracts:** building details; contract creation, validation and the duplicate guard; the access key; and the append-only triggers.
+- **Security:** the frontend route never serves files outside the built app.
 - **Imports:** a billing export with Albanian headers, decimal commas and bad lines; long and wide logger exports in l/s and metres; a pipe network with a projected feature; and that clearing each dataset restores the model exactly.
 
 The tests run on a temporary database, so they never write contracts into the real one.
