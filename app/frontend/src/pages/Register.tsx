@@ -55,7 +55,7 @@ export default function Register() {
     if (b.size) { setErr(t('Plotësoni fushat e shënuara me të kuqe.', 'Complete the fields marked in red.')); return }
     setBusy(true)
     try {
-      const k = await api.createContract({ ...f, full_name: f.full_name.trim(), building: f.building.trim(), lang })
+      const k = await api.createContract({ ...f, full_name: f.full_name.trim(), email: f.email.trim(), phone: f.phone.trim(), building: f.building.trim(), lang })
       bump()
       nav(`/kontrata/${k.number}?k=${k.access}`, { state: { fresh: true } })
     } catch (x) {

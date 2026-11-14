@@ -289,7 +289,7 @@ def customer(code: str):
         raise HTTPException(404, "Customer not found")
     an = next((a for a in sim.ANOMALIES if a["code"] == code), None)
     if c["lat"] is not None:
-        near = sorted((o for o in sim.CUSTOMERS if o["lat"] is not None), key=lambda o: sim.dist_m(c, o))[1:9]
+        near = sorted((o for o in sim.CUSTOMERS if o["lat"] is not None and o is not c), key=lambda o: sim.dist_m(c, o))[:8]
     else:  # no GIS point: compare with the customers of the same village
         near = [o for o in sim.CUSTOMERS if o is not c and o["village"] == c["village"]]
     peer = []
@@ -607,7 +607,8 @@ def targets() -> list[dict]:
     b, f = sim.balance(), sim.flows()
     pr = sim.pressures(True, 3.0, "A")
     nc = sim.A("connections")
-    leak_in_avg = sum(f["daily"][-7:]) / 7 - sum(f["daily"][:7]) / 7  # the new leak inside the 7-day balance
+    last, first = f["daily"][-7:], f["daily"][:7]
+    leak_in_avg = sum(last) / len(last) - sum(first) / len(first)  # the new leak inside the 7-day balance
     rec = sum(a["lost_m3_month"] for a in sim.ANOMALIES) / 30 + len(sim.MISMATCH["suspects"]) * 0.4
     billed = b["billed"] + rec
     apparent = max(0.0, b["apparent"] - rec)
@@ -666,11 +667,12 @@ def export(name: str):
 
 
 # ------------------------------------------------------------------ serve the built frontend
-DIST = Path(__file__).parent.parent / "frontend" / "dist"
+DIST = (Path(__file__).parent.parent / "frontend" / "dist").resolve()
 if DIST.exists():
     app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):
-        f = DIST / path
-        return FileResponse(f if path and f.is_file() else DIST / "index.html")
+        f = (DIST / path).resolve()
+        # only files inside dist; "/..%2f..%2fbackend/kciq.db" must not reach the database
+        return FileResponse(f if path and f.is_relative_to(DIST) and f.is_file() else DIST / "index.html")

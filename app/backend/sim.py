@@ -127,8 +127,8 @@ NO_CUSTOMER_BUILDINGS = [b["i"] for b in BUILDINGS if b["i"] not in _used]
 def _neighbour_median(c: dict, k: int = 8) -> float | None:
     if c["lat"] is None:
         return None
-    pool = [o for o in CUSTOMERS if o["lat"] is not None]
-    near = sorted(pool, key=lambda o: dist_m(c, o))[1:k + 1]
+    pool = [o for o in CUSTOMERS if o["lat"] is not None and o is not c]
+    near = sorted(pool, key=lambda o: dist_m(c, o))[:k]
     vals = sorted(o["avg"] for o in near if o["avg"] is not None)
     if len(vals) == k:
         return (vals[k // 2 - 1] + vals[k // 2]) / 2
@@ -441,8 +441,9 @@ def pressures(prv_on: bool = False, prv_set_bar: float = 3.0, prv_bands: str = "
 # ---------------------------------------------------------------- water balance (IWA)
 def balance() -> dict:
     f = flows()
-    inp = sum(f["daily"][-7:]) / 7
-    billed = sum(f["billed"][-7:]) / 7
+    week = f["daily"][-7:]  # measured data can hold as few as 3 days
+    inp = sum(week) / len(week)
+    billed = sum(f["billed"][-len(week):]) / len(week)
     unbilled_auth = inp * A("unbilled_auth_pct") / 100
     unauth = inp * A("unauth_pct") / 100
     under = billed * A("under_reg_pct") / (100 - A("under_reg_pct"))  # meters record (100-p)% of true use

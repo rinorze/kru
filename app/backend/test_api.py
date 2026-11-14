@@ -19,6 +19,14 @@ def test_all_get_endpoints():
         assert r.status_code == 200, (p, r.text[:300])
 
 
+def test_frontend_route_stays_inside_dist():
+    if not main.DIST.exists():
+        return
+    for p in ["/..%2f..%2fbackend%2fmain.py", "/%2e%2e/%2e%2e/backend/main.py", "/..%5c..%5cbackend%5cmain.py"]:
+        r = c.get(p)
+        assert "FastAPI" not in r.text, p
+
+
 def test_zone_covers_both_villages():
     z = c.get("/api/zone").json()
     assert set(z["villages"]) == {"Kçiq i Madh", "Kçiq i Vogël"}
