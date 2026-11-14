@@ -21,6 +21,8 @@ import Contracts from './pages/Contracts'
 import DataPage from './pages/DataPage'
 import ZonesPage from './pages/ZonesPage'
 import Day24 from './pages/Day24'
+import SubzonesPage from './pages/SubzonesPage'
+import PilotNz5 from './pages/PilotNz5'
 
 type Item = { to: string; sq: string; en: string; badge?: number | 'alarm' }
 type Section = { key: string; sq: string; en: string; icon: ReactNode; items: Item[]; also?: string[] }
@@ -47,7 +49,7 @@ function useSections(): Section[] {
   const openWo = wo.data?.filter(w => w.status !== 'done').length || undefined
   return [
     { key: 'overview', sq: 'Pasqyra', en: 'Overview', icon: ICON.overview, items: [{ to: '/', sq: 'Pasqyra', en: 'Overview' }] },
-    { key: 'map', sq: 'Harta', en: 'Map', icon: ICON.map, items: [{ to: '/zonat', sq: 'Zonat e presionit', en: 'Pressure zones' }, { to: '/harta', sq: 'Harta GIS', en: 'GIS map' }] },
+    { key: 'map', sq: 'Harta', en: 'Map', icon: ICON.map, items: [{ to: '/nenzonat', sq: 'Nënzonat dhe matja', en: 'Sub-zones and metering' }, { to: '/zonat', sq: 'Zonat e presionit', en: 'Pressure zones' }, { to: '/harta', sq: 'Harta GIS', en: 'GIS map' }] },
     { key: 'losses', sq: 'Humbjet', en: 'Losses', icon: ICON.losses, items: [
       { to: '/24-oret', sq: 'Uji në 24 orë', en: 'Water over 24 h' },
       { to: '/bilanci', sq: 'Bilanci i ujit', en: 'Water balance' },
@@ -68,6 +70,7 @@ function useSections(): Section[] {
       { to: '/kontratat', sq: 'Kontratat digjitale', en: 'Digital contracts', badge: ct.data?.length || undefined },
     ] },
     { key: 'pilot', sq: 'Pilot', en: 'Pilot', icon: ICON.pilot, items: [
+      { to: '/piloti-nz5', sq: 'Piloti NZ-5', en: 'NZ-5 pilot' },
       { to: '/plani', sq: 'Plani dhe buxheti', en: 'Plan and budget' },
       { to: '/te-dhenat', sq: 'Të dhënat e KRU-së', en: 'KRU data' },
       { to: '/supozimet', sq: 'Supozimet', en: 'Assumptions' },
@@ -226,6 +229,8 @@ export default function App() {
           <Route path="/" element={<Overview />} />
           <Route path="/harta" element={<MapPage />} />
           <Route path="/zonat" element={<ZonesPage />} />
+          <Route path="/nenzonat" element={<SubzonesPage />} />
+          <Route path="/piloti-nz5" element={<PilotNz5 />} />
           <Route path="/24-oret" element={<Day24 />} />
           <Route path="/bilanci" element={<BalancePage />} />
           <Route path="/nata" element={<NightFlow />} />

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Polygon, Tooltip } from 'react-leaflet'
+import L from 'leaflet'
+import { Link } from 'react-router-dom'
+import { Polygon, Tooltip, useMap } from 'react-leaflet'
 import ZoneMap, { type Marker } from '../components/ZoneMap'
 import { PageHead, Seg } from '../components/ui'
 import { fmt, useApp } from '../state'
@@ -33,6 +35,16 @@ const R_CLASSES = [
 ]
 const rClass = (r: number) => R_CLASSES.find(c => r < c.hi) ?? R_CLASSES[R_CLASSES.length - 1]
 
+// opens on the 19 zones instead of the whole cadastral area (runs after the map's own fit)
+function FitZones({ zones }: { zones: Z[] }) {
+  const map = useMap()
+  useEffect(() => {
+    const id = setTimeout(() => map.fitBounds(L.latLngBounds(zones.flatMap(z => z.polygon)), { padding: [24, 24] }), 0)
+    return () => clearTimeout(id)
+  }, [zones, map])
+  return null
+}
+
 export default function ZonesPage() {
   const { t } = useApp()
   const [d, setD] = useState<ZData | null>(null)
@@ -60,8 +72,7 @@ export default function ZonesPage() {
   return (
     <div className="page">
       <PageHead title={t('Harta tematike e zonave të presionit', 'Thematic map of the pressure zones')}
-        lead={t('19 zonat Z1–Z19 me ngjyrë sipas presionit maksimal statik ose sipas indeksit të rrezikut të rrjedhjeve. Zonat e kuqe janë ku duhet të shkojnë PRV-të e para dhe testet hap pas hapi.',
-          'The 19 zones Z1–Z19 coloured by maximum static pressure or by a leakage-risk index. The red zones are where the first PRVs and step tests should go.')}
+        lead={<>{t('Presioni statik i çdo pike konsumatori, nga modeli i rrugëve reale (KML, 19 zona, 1 040 pika). Zonat e kuqe janë ku duhet të shkojnë PRV-të e para. Struktura finale e projektit, 5 nënzona dhe 18 zona presioni, është te ', "Static pressure at every consumer point, from the real-roads model (KML, 19 zones, 1,040 points). Red zones are where the first PRVs go. The project's final structure, 5 sub-zones and 18 pressure zones, is on ")}<Link to="/nenzonat">{t('Nënzonat dhe matja', 'Sub-zones and metering')}</Link>.</>}
         actions={<a className="btn" href="/Kciq_zonat_tematike.kmz" download>{t('Shkarko për Google Earth', 'Download for Google Earth')}</a>} />
 
       <div className="map-tools">
@@ -71,7 +82,8 @@ export default function ZonesPage() {
       </div>
 
       <section className="panel thematic">
-        <ZoneMap size="tall" markers={markers} showPois={false}>
+        <ZoneMap size="tall" markers={markers} showPois={false} fit={false}>
+          <FitZones zones={d.zones} />
           {rows.map(z => {
             const fill = view === 'pressure' ? pClass(z.p_max).hex : rClass(z.risk).hex
             return <Polygon key={z.id} positions={z.polygon} pathOptions={{ color: '#fff', weight: 1.5, fillColor: fill, fillOpacity: pts ? 0.35 : 0.65 }}>

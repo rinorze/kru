@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { api } from '../api'
+import { DMA } from '../dma'
 import ProfileChart from '../components/ProfileChart'
 import { Loading } from '../components/ui'
 import { eur, fmt, useApp, useData } from '../state'
@@ -97,15 +98,21 @@ export default function Overview() {
     <div className="page overview">
       <section className="hero" aria-labelledby="hero-h">
         <div className="hero-text">
-          <span className="eyebrow">{t('Një ide: DMA inteligjente për Kçiqin', 'One idea: an intelligent DMA for Kçiq')}</span>
+          <span className="eyebrow">{t('DMA Kçiq – zona e matur mbi rrjetin e KRU Mitrovica', 'DMA Kçiq – a metered zone on the KRU Mitrovica network')}</span>
           <h1 id="hero-h">{t('Kçiq humb 69,9% të ujit që hyn në zonë', 'Kçiq loses 69.9% of the water that enters the zone')}</h1>
-          <p>{t('Matësi i zonës (shkurt–shtator 2026) tregon 1.599 m³ në ditë hyrje dhe vetëm 481 m³ të faturuar [MATUR]. Natën konsumi bie pothuajse në zero, por uji vazhdon të hyjë: shumica e humbjes është rrjedhje fizike, e shtyrë nga presioni deri në 12,6 bar.',
-            'The zone meter (February–September 2026) shows 1,599 m³ a day going in and only 481 m³ billed [MEASURED]. At night use falls almost to zero but water keeps flowing in: most of the loss is physical leakage, driven by pressure of up to 12.6 bar.')}</p>
+          <p>{t('Matësi i zonës tregon 1.599 m³ në ditë hyrje dhe vetëm 481 m³ të faturuar [MATUR]. Nga RES_Kçiq (707 m) deri te shtëpia më e ulët (507 m) ka 200 m rënie, dhe asnjë UMZ nuk ka telemetri: presioni është problemi, matja mungon.',
+            'The zone meter shows 1,599 m³ a day going in and only 481 m³ billed [MEASURED]. From RES_Kçiq (707 m) to the lowest house (507 m) there is a 200 m drop, and no zone meter has telemetry: pressure is the problem and metering is missing.')}</p>
+          <dl className="hero-figs">
+            <div><dt>{t('shtëpi (GIS)', 'houses (GIS)')}</dt><dd>{DMA.houses}</dd></div>
+            <div><dt>{t('nënzona të matura', 'metered sub-zones')}</dt><dd>{DMA.subzones}</dd></div>
+            <div><dt>{t('zona presioni', 'pressure zones')}</dt><dd>{DMA.pressureZones}</dd></div>
+            <div><dt>{t('direkt në 3–5 bar', 'directly at 3–5 bar')}</dt><dd>{DMA.direct35Pct}%</dd></div>
+          </dl>
           <ol className="phases">
-            <li><b>{t('Faza 1 · muaji 1–3', 'Phase 1 · months 1–3')}</b>{t('Gjej rrjedhjet: riparo telemetrinë, rrjedha e natës çdo 15 min, teste hap pas hapi, logger akustik, riparime.', 'Find the leaks: repair telemetry, night flow every 15 min, step tests, acoustic loggers, repairs.')} <Link to="/24-oret">{t('Uji në 24 orë', 'Water over 24 h')} →</Link></li>
-            <li><b>{t('Faza 2 · muaji 4–6', 'Phase 2 · months 4–6')}</b>{t('Ul presionin: zona presioni me PRV, së pari Z17 dhe Z7 mbi 9 bar, që rrjedhjet të mos kthehen.', 'Cut the pressure: pressure zones with PRVs, first Z17 and Z7 above 9 bar, so leaks do not come back.')} <Link to="/zonat">{t('Harta e zonave', 'Zone map')} →</Link></li>
+            <li><b>{t('1 · Mat', '1 · Measure')}</b>{t('MP-0, MP-1, MP-2, LS-1, UMZ-NZ5 dhe logger GSM çdo 15 min; riparo pompën P2.', 'MP-0, MP-1, MP-2, LS-1, UMZ-NZ5 and GSM loggers every 15 min; repair pump P2.')} <Link to="/nenzonat">{t('Nënzonat dhe matja', 'Sub-zones and metering')} →</Link></li>
+            <li><b>{t('2 · Pilot NZ-5', '2 · NZ-5 pilot')}</b>{t('Kufi i mbyllur, 4 PRV, testi zero-presion, MNF bazë 02:00–04:00.', 'Sealed boundary, 4 PRVs, zero-pressure test, baseline MNF 02:00–04:00.')} <Link to="/piloti-nz5">{t('Piloti NZ-5', 'NZ-5 pilot')} →</Link></li>
+            <li><b>{t('3 · Shtri', '3 · Extend')}</b>{t('12 PRV të reja në NZ-1 deri NZ-4, 18 zona presioni në 3–5 bar.', '12 new PRVs in NZ-1 to NZ-4, 18 pressure zones at 3–5 bar.')} <Link to="/24-oret">{t('Uji në 24 orë', 'Water over 24 h')} →</Link></li>
           </ol>
-          <p className="target">{t('Objektivi pas 6 muajsh: NRW nga 70% në ≤ 45%, rreth 400 m³ më pak humbje në ditë [VLERËSUAR].', 'Target after 6 months: NRW from 70% to ≤ 45%, about 400 m³ less lost per day [ESTIMATED].')}</p>
         </div>
         <LiveSensors />
         <div className="hero-chart">

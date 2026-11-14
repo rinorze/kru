@@ -24,8 +24,8 @@ export function FlyTo({ lat, lon, zoom = 17 }: { lat: number | null; lon: number
 
 const POI_ICON: Record<string, string> = { school: '#5B2AA6', hospital: '#B42318', place_of_worship: '#1E7F4F', fuel: '#9A6200', pharmacy: '#B42318' }
 
-export default function ZoneMap({ markers = [], size = '', showSensors = true, showPois = true, sensors = [], selected = null, children }:
-  { markers?: Marker[]; size?: '' | 'tall' | 'short'; showSensors?: boolean; showPois?: boolean; sensors?: Sensor[]
+export default function ZoneMap({ markers = [], size = '', showSensors = true, showPois = true, sensors = [], selected = null, fit = true, children }:
+  { fit?: boolean; markers?: Marker[]; size?: '' | 'tall' | 'short'; showSensors?: boolean; showPois?: boolean; sensors?: Sensor[]
     selected?: { lat: number; lon: number } | null; children?: ReactNode }) {
   const { zone, t, live } = useApp()
   // a wider click radius on the canvas renderer, so small building dots can be tapped on a phone
@@ -33,7 +33,7 @@ export default function ZoneMap({ markers = [], size = '', showSensors = true, s
   return (
     <div className={'map ' + size}>
       <MapContainer center={[42.862, 20.925]} zoom={14} renderer={renderer} style={{ height: '100%' }} scrollWheelZoom>
-        <Fit zone={zone} />
+        {fit && <Fit zone={zone} />}
         <LayersControl position="topright">
           <LayersControl.BaseLayer checked name={t('Harta (OSM)', 'Map (OSM)')}>
             <TileLayer attribution="© OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={19} />
