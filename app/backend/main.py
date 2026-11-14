@@ -675,4 +675,8 @@ if DIST.exists():
     def spa(path: str):
         f = (DIST / path).resolve()
         # only files inside dist; "/..%2f..%2fbackend/kciq.db" must not reach the database
-        return FileResponse(f if path and f.is_relative_to(DIST) and f.is_file() else DIST / "index.html")
+        if path and f.is_relative_to(DIST) and f.is_file():
+            return FileResponse(f)
+        # index.html names the hashed bundles of the current build; a cached copy after a redeploy
+        # points at files that no longer exist and the page stays blank, so it is never cached
+        return FileResponse(DIST / "index.html", headers={"Cache-Control": "no-cache, must-revalidate"})
