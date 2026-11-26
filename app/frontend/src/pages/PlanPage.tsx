@@ -35,7 +35,7 @@ export default function PlanPage() {
       <section className="panel mt flush">
         <table className="data">
           <thead><tr><th>{t('Treguesi', 'Indicator')}</th><th className="r">{t('Sot', 'Today')}</th><th className="r">{t('Muaji 6', 'Month 6')}</th><th className="r">{t('Muaji 12', 'Month 12')}</th></tr></thead>
-          <tbody>{p.targets.map(x => <tr key={x.en}><td>{t(x.sq, x.en)}</td><td className="r num">{x.base}</td><td className="r num">{x.m6}</td><td className="r num"><b>{x.m12}</b></td></tr>)}</tbody>
+          <tbody>{p.targets.map(x => <tr key={x.en}><td>{t(x.sq, x.en)}</td><td className="r num">{x.base ?? t("për t'u matur", 'to be measured')}</td><td className="r num">{x.m6}</td><td className="r num"><b>{x.m12}</b></td></tr>)}</tbody>
         </table>
         {p.targets_note && <p className="note" style={{ padding: '8px 12px', margin: 0 }}>{t(p.targets_note.sq, p.targets_note.en)}</p>}
       </section>

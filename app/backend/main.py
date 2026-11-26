@@ -631,7 +631,7 @@ def targets() -> list[dict]:
         {"sq": "Presioni maksimal në brezin A", "en": "Maximum pressure in band A", "base": "%.1f bar" % pr["bands"]["A"]["p_now_max"],
          "m6": "%.1f bar" % pr["bands"]["A"]["p_new_max"], "m12": "%.1f bar" % pr["bands"]["A"]["p_new_max"]},
         {"sq": "Ndërtesa mbi 7 bar (ARRU)", "en": "Buildings above 7 bar (ARRU)", "base": "%d" % pr["arru_over_now"], "m6": "%d" % pr["arru_over_new"], "m12": "%d" % pr["arru_over_new"]},
-        {"sq": "Presioni në pikën kritike", "en": "Pressure at the critical point", "base": "për t'u matur / to be measured", "m6": "≥ 2.5 bar", "m12": "≥ 2.5 bar"},
+        {"sq": "Presioni në pikën kritike", "en": "Pressure at the critical point", "base": None, "m6": "≥ 2.5 bar", "m12": "≥ 2.5 bar"},
         {"sq": "Konsumatorë me pikë në GIS", "en": "Customers with a GIS point", "base": pct(gis), "m6": "100%", "m12": "100%"},
     ]
 
