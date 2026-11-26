@@ -40,8 +40,8 @@ export default function FieldApp() {
   return (
     <div className="page">
       <PageHead title={t('Lexim në terren', 'Field reading')}
-        lead={t('Pamja që lexuesi sheh në telefon. Kontrolli i leximit bëhet menjëherë, para se të largohet nga shtëpia. Në versionin Android punon offline me SQLite dhe sinkronizohet përmes Mobile Sync të KRU-së.',
-          'The screen a meter reader sees on the phone. The reading is checked on the spot, before they leave the house. The Android version works offline with SQLite and syncs through KRU\'s Mobile Sync.')} />
+        lead={t('Pamja që lexuesi sheh në telefon. Kontrolli i leximit bëhet menjëherë, para se të largohet nga shtëpia. Në KRU, lexuesit përdorin aplikacionin Android offline me Mobile Sync; ky kontroll do të shtohej aty.',
+          'The screen a meter reader sees on the phone. The reading is checked on the spot, before they leave the house. At KRU, readers use the offline Android app with Mobile Sync; this check would be added there.')} />
       <div className="phone">
         <label className="field">{t('Kodi i konsumatorit', 'Customer code')}<input type="text" value={code} onChange={e => setCode(e.target.value)} autoCapitalize="characters" /></label>
         <label className="field">{t('Leximi i këtij muaji (m³)', 'This month\'s reading (m³)')}<input className="big num" type="text" inputMode="decimal" value={reading} onChange={e => setReading(e.target.value)} placeholder="0" /></label>

@@ -70,8 +70,8 @@ export default function Register() {
   return (
     <div className="page">
       <PageHead title={t('Regjistrohu në KRU Mitrovica', 'Register with KRU Mitrovica')}
-        lead={t('Kërkesë për lidhje të re me ujësjellësin. Pas nënshkrimit merrni menjëherë kontratën digjitale dhe kodin e konsumatorit; kontrata ruhet përgjithmonë në regjistrin e KRU-së.',
-          'Apply for a new water connection. Once you sign you get the digital contract and your customer code straight away; the contract is kept for good in the KRU register.')}
+        lead={t('Kërkesë për lidhje të re me ujësjellësin. Pas nënshkrimit merrni menjëherë kontratën digjitale dhe kodin e konsumatorit; kontrata shtohet në regjistrin e kontratave.',
+          'Apply for a new water connection. Once you sign you get the digital contract and your customer code straight away; the contract is added to the contract register.')}
         actions={<Link className="btn" to="/kontratat">{t('Regjistri i kontratave', 'Contract register')}</Link>} />
 
       <div className="grid g-side">
@@ -141,7 +141,7 @@ export default function Register() {
           <div className="callout mt"><b>{t('Pse ka rëndësi për humbjet', 'Why it matters for losses')}</b>
             {t('Çdo banesë që merr ujë pa kontratë është humbje e dukshme. Harta gjen banesat pa konsumator; ky formular i kthen në klientë që paguajnë.',
               'Every dwelling that takes water without a contract is an apparent loss. The map finds dwellings with no customer; this form turns them into paying customers.')}</div>
-          <p className="note">{t('Prototip: kontratat ruhen në bazën lokale të panelit dhe nuk dërgohen në sistemin e faturimit të KRU-së.', 'Prototype: contracts are stored in the panel\'s local database and are not sent to the KRU billing system.')}</p>
+          <p className="note">{t('Prototip: kontratat ruhen në bazën lokale të panelit dhe nuk dërgohen në sistemin e faturimit të KRU-së. Në demon online kjo bazë është e përkohshme dhe fshihet kur serveri rifillon, prandaj mos vendosni të dhëna reale personale.', 'Prototype: contracts are stored in the panel\'s local database and are not sent to the KRU billing system. On the online demo that database is temporary and is wiped when the server restarts, so do not enter real personal data.')}</p>
         </aside>
       </div>
     </div>

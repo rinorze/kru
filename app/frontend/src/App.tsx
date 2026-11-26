@@ -15,6 +15,7 @@ import FieldApp from './pages/FieldApp'
 import PlanPage from './pages/PlanPage'
 import Assumptions from './pages/Assumptions'
 import Sources from './pages/Sources'
+import NotFound from './pages/NotFound'
 import Register from './pages/Register'
 import ContractPage from './pages/ContractPage'
 import Contracts from './pages/Contracts'
@@ -247,7 +248,7 @@ export default function App() {
           <Route path="/kontratat" element={<Contracts />} />
           <Route path="/kontrata/:number" element={<ContractPage />} />
           <Route path="/te-dhenat" element={<DataPage />} />
-          <Route path="*" element={<Overview />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
       <BottomBar sections={sections} current={current} />

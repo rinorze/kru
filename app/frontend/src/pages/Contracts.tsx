@@ -16,8 +16,8 @@ export default function Contracts() {
   return (
     <div className="page">
       <PageHead title={t('Regjistri i kontratave', 'Contract register')}
-        lead={t('Çdo kontratë e nënshkruar digjitalisht. Regjistri vetëm shton: kontratat nuk ndryshohen dhe nuk fshihen, dhe secila lidhet me gjurmën e kontratës para saj.',
-          'Every digitally signed contract. The register only grows: contracts are never changed or deleted, and each is linked to the fingerprint of the one before it.')}
+        lead={t('Çdo kontratë e nënshkruar digjitalisht. Regjistri vetëm shton: kontratat nuk ndryshohen dhe nuk fshihen, dhe secila lidhet me gjurmën e kontratës para saj. Në demon online regjistri fillon bosh sa herë që serveri rifillon.',
+          'Every digitally signed contract. The register only grows: contracts are never changed or deleted, and each is linked to the fingerprint of the one before it. On the online demo the register starts empty whenever the server restarts.')}
         actions={<Link className="btn primary" to="/regjistrohu">{t('Regjistrim i ri', 'New registration')}</Link>} />
       {!data ? <Loading error={error} /> : (
         <section className="panel flush">

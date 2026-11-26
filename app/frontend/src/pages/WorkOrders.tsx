@@ -28,8 +28,8 @@ export default function WorkOrders() {
   return (
     <div className="page">
       <PageHead title={t('Urdhrat e punës', 'Work orders')}
-        lead={t('Çdo anomali, banesë e dyshimtë, alarm nate ose PRV bëhet urdhër pune. Ruhen në SQLite në server, njësoj si regjistri append-only i KRU-së.',
-          'Every anomaly, suspect dwelling, night alarm or PRV becomes a work order. They are stored in SQLite on the server, like KRU\'s append-only log.')}
+        lead={t('Çdo anomali, banesë e dyshimtë, alarm nate ose PRV bëhet urdhër pune. Ruhen në bazën SQLite të panelit (në demon online, përkohësisht), njësoj si regjistri append-only i KRU-së.',
+          'Every anomaly, suspect dwelling, night alarm or PRV becomes a work order. They are stored in the panel database (temporarily on the online demo), like KRU\'s append-only log.')}
         actions={<a className="btn" href="/api/export/workorders.csv">{t('Eksporto CSV', 'Export CSV')}</a>} />
       <section className="panel" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
         <select value={kind} onChange={e => setKind(e.target.value)} style={{ width: 150 }} aria-label={t('Lloji', 'Type')}>

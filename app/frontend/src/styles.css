@@ -228,9 +228,14 @@ textarea { min-height: 70px; resize: vertical; }
 .check { display: flex; gap: 8px; align-items: center; font-size: 14px; margin-bottom: 12px; cursor: pointer; }
 
 /* ---------- tables ---------- */
-table.data { width: 100%; border-collapse: collapse; font-size: 14px; }
-table.data th { text-align: left; font-weight: 500; color: var(--mute); font-size: 12.5px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: #F7F9F9; position: sticky; top: 0; z-index: 1; }
-table.data td { padding: 8px 12px; border-bottom: 1px solid var(--line-2); vertical-align: middle; }
+/* `.table` (inside `.table-wrap`) is used by the zone, sub-zone, pilot and 24h pages. */
+.table-wrap { overflow-x: auto; }
+/* Grid cells may shrink below their content, so a wide table scrolls inside its panel. */
+.grid > * { min-width: 0; }
+table.data, .table { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.data th, .table th { text-align: left; font-weight: 500; color: var(--mute); font-size: 12.5px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: #F7F9F9; position: sticky; top: 0; z-index: 1; }
+table.data td, .table td { padding: 8px 12px; border-bottom: 1px solid var(--line-2); vertical-align: middle; }
+.table th.num, .table td.num { text-align: right; white-space: nowrap; }
 table.data td.r, table.data th.r { text-align: right; }
 table.data tr.click { cursor: pointer; }
 table.data tr.click:hover td { background: var(--water-2); }
@@ -271,7 +276,8 @@ table.data tr.sel td { background: var(--water-2); }
 .map { height: 640px; border-radius: var(--r-m); overflow: hidden; border: 1px solid var(--line); }
 .map.tall { height: calc(100vh - 230px); min-height: 520px; }
 .map.short { height: 360px; }
-.leaflet-container { font-family: var(--body); background: #dfe7e6; }
+/* isolation keeps Leaflet's controls (z-index 1000) below the sticky header and bottom bar. */
+.leaflet-container { font-family: var(--body); background: #dfe7e6; isolation: isolate; }
 .leaflet-popup-content { font-size: 13.5px; line-height: 1.45; }
 .map-tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
 
@@ -486,8 +492,8 @@ ol.clauses { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
   .ov-grid { grid-template-columns: 1fr; gap: 30px; margin-top: 28px; }
   .todo li { flex-direction: column; align-items: flex-start; gap: 10px; }
   .g2, .g4, .kanban, .tiers, .iwa, .form-grid, .contract-parties, .contract-sign { grid-template-columns: 1fr; }
-  table.data { min-width: 520px; }
-  table.data.compact { min-width: 0; }
+  table.data, .table { min-width: 520px; }
+  table.data.compact, .table.compact { min-width: 0; }
   .gantt { grid-template-columns: 1fr; }
   .page-head h1 { font-size: 28px; }
   .map.tall { height: 58vh; min-height: 360px; }

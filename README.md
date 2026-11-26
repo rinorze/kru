@@ -25,7 +25,7 @@ The interface is in Albanian and English.
   - hartën GIS me detaje për çdo ndërtesë;
   - urdhrat e punës;
   - leximin në terren;
-  - regjistrimin e konsumatorëve të rinj me kontratë digjitale të nënshkruar, e cila ruhet përgjithmonë;
+  - regjistrimin e konsumatorëve të rinj me kontratë digjitale të nënshkruar (në demon online ruhet përkohësisht, deri në rifillimin e serverit);
   - ngarkimin e të dhënave reale të KRU-së (faturimi, loggerët/SCADA, GIS-i i rrjetit) te faqja "Të dhënat e KRU-së".
 
 ## What is real and what is modelled

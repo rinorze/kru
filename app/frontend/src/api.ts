@@ -50,7 +50,7 @@ export interface WorkOrder { id: number; kind: string; ref: string; title: strin
 export interface Assumption { v: number; unit: string; src: string; sq: string; en: string }
 export interface Plan {
   phases: { m0: number; m1: number; sq: string; en: string; who: string; d_sq: string; d_en: string }[]
-  targets: { sq: string; en: string; base: string; m6: string; m12: string }[]
+  targets: { sq: string; en: string; base: string | null; m6: string; m12: string }[]
   targets_note?: { sq: string; en: string }
   budget: {
     note_sq: string; note_en: string
